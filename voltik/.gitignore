@@ -1,0 +1,14 @@
+node_modules/
+.next/
+out/
+
+# Local env files (never commit secrets)
+.env
+.env.local
+.env.*.local
+
+# Old file-DB artifacts from when this ran on JSON files
+data/
+
+.DS_Store
+*.log

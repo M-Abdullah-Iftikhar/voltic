@@ -145,6 +145,25 @@ On first request, Voltik will create the `voltik` database, six collections (`pr
 - Storefront should work end-to-end: sign up a user, place an order, write a review.
 - Check Atlas → **Browse Collections** to see the data land in the `voltik` DB.
 
+### Troubleshooting Vercel deploys
+
+If you see **"Application error: a server-side exception has occurred"** with a digest:
+
+1. **Visit `/api/health` on the deployed URL** — e.g. `https://your-app.vercel.app/api/health`. It returns JSON pinpointing the exact issue.
+2. The custom error page in this project also auto-runs the health check and shows a fix checklist tailored to the failure mode (no URI, network blocked, auth failed, DNS, etc.).
+
+Most common causes, in order of likelihood:
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `MONGODB_URI is not set` | Env vars not added in Vercel | Vercel → Project → Settings → Environment Variables → add `MONGODB_URI` for **Production, Preview, Development**, then **Redeploy** the latest deployment |
+| Server selection timeout | Atlas Network Access blocks Vercel | Atlas → Network Access → **Add IP Address** → `0.0.0.0/0` (Allow access from anywhere). Vercel functions don't have fixed IPs |
+| `Authentication failed` / `bad auth` | Wrong user/password in URI, or special chars not URL-encoded | Atlas → Database Access → verify user; URL-encode `#`, `@`, `:`, `/`, `?` in the password (e.g. `arizz123#` → `arizz123%23` in the URI) |
+| `querySrv ENOTFOUND` | Cluster paused or hostname wrong | Atlas → Clusters → resume; recopy connection string from **Connect → Drivers** |
+| Works locally, fails on Vercel | Env vars set locally but not on Vercel | Re-add them in the Vercel project settings, then redeploy |
+
+> **Important**: Vercel does NOT auto-redeploy when you change env vars. You must trigger a redeploy: Vercel → Deployments → … menu → **Redeploy**.
+
 ### Tightening network access for production
 The `0.0.0.0/0` rule is fine for a demo. Before you put this in front of real customers:
 - Use **MongoDB Atlas → Network Peering** or **Private Endpoint** to talk to MongoDB without ever traversing the public internet

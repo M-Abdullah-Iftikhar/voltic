@@ -115,8 +115,8 @@ export function DropEventLanding({ product, dropAt }: Props) {
           <span className={`chip ${isLive ? 'bg-success text-bg' : liveSoon ? 'bg-accent2 text-bg animate-pulse' : 'bg-brand/10 text-brand'} text-[10px] uppercase tracking-[0.18em]`}>
             {isLive ? 'Live now' : liveSoon ? 'Going live soon' : 'Voltik drop'}
           </span>
-          <h1 className="font-display font-bold text-5xl sm:text-6xl mt-4 leading-[1.05]">
-            <span className="block text-muted text-xl tracking-wide uppercase font-semibold">Limited release</span>
+          <h1 className="font-display font-bold text-3xl sm:text-5xl lg:text-6xl mt-4 leading-[1.05] break-words">
+            <span className="block text-muted text-base sm:text-xl tracking-wide uppercase font-semibold">Limited release</span>
             <span className="bg-gradient-to-r from-brand via-brand2 to-accent2 bg-clip-text text-transparent">{product.name}</span>
           </h1>
           <p className="text-muted mt-4 max-w-md mx-auto">
@@ -225,7 +225,7 @@ function Countdown({ remaining, live }: { remaining: number | null; live: boolea
   if (live) {
     return (
       <div className="text-center">
-        <div className="font-display text-5xl sm:text-6xl font-bold gradient-text">It's live.</div>
+        <div className="font-display text-4xl sm:text-6xl font-bold gradient-text">It's live.</div>
         <Link href="/shop" className="btn-primary mt-5 inline-flex">
           Go to the shelf <Icon.arrow width={12} height={12} />
         </Link>

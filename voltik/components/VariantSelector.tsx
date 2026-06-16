@@ -70,9 +70,9 @@ function Group({ group }: { group: VariantGroup }) {
 
   return (
     <div>
-      <div className="flex items-baseline justify-between gap-3">
-        <span className="text-[10px] uppercase tracking-[0.18em] text-muted font-semibold">{group.label}</span>
-        <span className="text-sm text-ink font-semibold">{v.label}{v.hint ? <span className="text-muted font-normal"> · {v.hint}</span> : null}</span>
+      <div className="flex items-baseline justify-between gap-3 min-w-0">
+        <span className="text-[10px] uppercase tracking-[0.18em] text-muted font-semibold shrink-0">{group.label}</span>
+        <span className="text-sm text-ink font-semibold truncate text-right">{v.label}{v.hint ? <span className="text-muted font-normal"> · {v.hint}</span> : null}</span>
       </div>
 
       <div ref={railRef} className="relative mt-3 flex flex-wrap items-end gap-3">

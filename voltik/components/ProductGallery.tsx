@@ -52,6 +52,10 @@ export function ProductGallery({ product }: { product: EnrichedProduct }) {
   const spinDragRef = useRef<{ x: number; start: number } | null>(null);
   const heroRef = useRef<HTMLDivElement>(null);
   const [reduced, setReduced] = useState(false);
+  // Touch / coarse-pointer devices skip the hover-zoom — on a phone a
+  // tap that drags before release would briefly magnify, then open the
+  // modal on release. Cleaner to just route taps straight to the modal.
+  const [coarsePointer, setCoarsePointer] = useState(false);
 
   // Respect reduced-motion — kill the auto-tilt and hover-zoom for
   // users who asked for stillness. Click-to-zoom still works.
@@ -61,7 +65,16 @@ export function ProductGallery({ product }: { product: EnrichedProduct }) {
     setReduced(mq.matches);
     const onChange = () => setReduced(mq.matches);
     mq.addEventListener('change', onChange);
-    return () => mq.removeEventListener('change', onChange);
+
+    const coarse = window.matchMedia('(pointer: coarse)');
+    setCoarsePointer(coarse.matches);
+    const onCoarse = () => setCoarsePointer(coarse.matches);
+    coarse.addEventListener('change', onCoarse);
+
+    return () => {
+      mq.removeEventListener('change', onChange);
+      coarse.removeEventListener('change', onCoarse);
+    };
   }, []);
 
   // Close the zoom modal on Escape.
@@ -73,7 +86,9 @@ export function ProductGallery({ product }: { product: EnrichedProduct }) {
   }, [modalOpen]);
 
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (reduced) return;
+    // Skip the hover-magnifier on touch devices and reduced-motion.
+    // Mobile users get the click-to-zoom modal instead.
+    if (reduced || coarsePointer) return;
     const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width)  * 100;
     const y = ((e.clientY - rect.top)  / rect.height) * 100;
@@ -144,9 +159,14 @@ export function ProductGallery({ product }: { product: EnrichedProduct }) {
             </div>
             <SpecHoverHalo features={product.features || []} />
 
-            {/* Magnifier badge — appears on hover so users know zoom is live */}
-            <div className={`absolute top-3 right-3 chip bg-bg/80 backdrop-blur text-ink !text-[10px] transition-opacity ${zoom.on && !reduced ? 'opacity-100' : 'opacity-0 group-hover:opacity-70'}`}>
-              <Icon.search width={10} height={10} /> 2× magnifier · click for full
+            {/* Magnifier badge — appears on hover so users know zoom is
+                live. Hidden on touch since the magnifier itself is
+                disabled there; touch users get a "tap to zoom" hint
+                anchored to the same spot. */}
+            <div className={`absolute top-3 right-3 chip bg-bg/80 backdrop-blur text-ink !text-[10px] transition-opacity ${coarsePointer ? 'opacity-70' : zoom.on && !reduced ? 'opacity-100' : 'opacity-0 group-hover:opacity-70'}`}>
+              <Icon.search width={10} height={10} />
+              <span className="hidden sm:inline">{coarsePointer ? 'Tap to zoom' : '2× magnifier · click for full'}</span>
+              <span className="sm:hidden">{coarsePointer ? 'Tap' : '2×'}</span>
             </div>
           </div>
 

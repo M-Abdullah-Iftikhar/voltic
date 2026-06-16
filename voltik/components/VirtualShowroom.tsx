@@ -70,12 +70,12 @@ export function VirtualShowroom({ products }: { products: EnrichedProduct[] }) {
 
   return (
     <section className="relative overflow-hidden">
-      <header className="container-x pt-12 text-center">
+      <header className="container-x pt-8 sm:pt-12 text-center">
         <span className="text-[10px] uppercase tracking-[0.18em] font-semibold text-brand">Virtual showroom</span>
-        <h1 className="font-display font-bold text-4xl sm:text-5xl mt-2 leading-tight">
+        <h1 className="font-display font-bold text-3xl sm:text-4xl md:text-5xl mt-2 leading-tight">
           Take a wander.
         </h1>
-        <p className="text-muted text-sm mt-2 max-w-md mx-auto">
+        <p className="text-muted text-sm mt-2 max-w-md mx-auto px-4">
           A whole room of Voltik, laid out like a showroom. Drag to look around, hover any product to spotlight it, click to pick it up.
         </p>
       </header>
@@ -86,7 +86,10 @@ export function VirtualShowroom({ products }: { products: EnrichedProduct[] }) {
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
-        className={`relative mt-8 h-[700px] sm:h-[760px] overflow-hidden bg-gradient-to-b from-elev via-bg to-bg ${reduced ? '' : 'cursor-grab active:cursor-grabbing'} touch-none`}
+        // `touch-pan-y` lets vertical page scroll through on mobile while
+        // still intercepting horizontal drags for the room tilt — without
+        // it the showroom traps the user on this section.
+        className={`relative mt-6 sm:mt-8 h-[520px] sm:h-[680px] lg:h-[760px] overflow-hidden bg-gradient-to-b from-elev via-bg to-bg ${reduced ? '' : 'cursor-grab active:cursor-grabbing'} touch-pan-y`}
         style={{ perspective: '1400px' }}
       >
         {/* Floor — receding parallelogram with a subtle tile pattern. */}

@@ -195,6 +195,36 @@ export const SEED_USERS: SeedUser[] = [
     createdAt: '2025-11-30',
     cart: [],
     favorites: []
+  },
+  // Extra seeded reviewers so each (productId, userId) pair on the
+  // reviews collection stays unique under the new index added in
+  // round 16. Their reviews are mixed in below.
+  {
+    id: 'u-priya',
+    email: 'priya@voltik.com',
+    name: 'Priya Shah',
+    plainPassword: 'priya123',
+    createdAt: '2025-12-08',
+    cart: [],
+    favorites: []
+  },
+  {
+    id: 'u-kenji',
+    email: 'kenji@voltik.com',
+    name: 'Kenji Tanaka',
+    plainPassword: 'kenji123',
+    createdAt: '2026-01-04',
+    cart: [],
+    favorites: []
+  },
+  {
+    id: 'u-maya',
+    email: 'maya@voltik.com',
+    name: 'Maya Lindqvist',
+    plainPassword: 'maya1234',
+    createdAt: '2026-02-11',
+    cart: [],
+    favorites: []
   }
 ];
 
@@ -235,12 +265,12 @@ export const SEED_REVIEWS: Review[] = [
   // v-001 TurboFlow 65W
   { id:'r-001', productId:'v-001', userId:'u-demo', userName:'Demo Voltic', rating:5, title:'Charges my Pixel at full speed', body:'Finally a cable that delivers the full 65W. My Pixel 8 Pro hits 30W steady — none of the throttling I got from random cables.', createdAt:'2026-04-12' },
   { id:'r-002', productId:'v-001', userId:'u-alex', userName:'Alex Wong',   rating:5, title:'Build feels indestructible',           body:'The braided sleeve is super dense, and the connectors fit snugly. Three months in and zero fraying.', createdAt:'2026-05-02' },
-  { id:'r-003', productId:'v-001', userId:'u-demo', userName:'Demo Voltic', rating:4, title:'Slightly stiff at first',               body:'Took a week to soften up — but once it does, it lays flat. Solid value.', createdAt:'2026-05-19' },
+  { id:'r-003', productId:'v-001', userId:'u-priya', userName:'Priya Shah', rating:4, title:'Slightly stiff at first',               body:'Took a week to soften up — but once it does, it lays flat. Solid value.', createdAt:'2026-05-19' },
 
   // v-002 PowerCore 20K
   { id:'r-010', productId:'v-002', userId:'u-demo', userName:'Demo Voltic', rating:5, title:'Genuinely slim for 20K',                body:'Fits in a jeans pocket. Charged my iPhone 15 from 5% to 100% four times before needing a top-up.', createdAt:'2026-03-08' },
   { id:'r-011', productId:'v-002', userId:'u-alex', userName:'Alex Wong',   rating:5, title:'Travels through customs fine',           body:'74Wh, well under the 100Wh airline limit. Took it on three flights last quarter, no questions asked.', createdAt:'2026-04-21' },
-  { id:'r-012', productId:'v-002', userId:'u-demo', userName:'Demo Voltic', rating:4, title:'LED could be dimmer at night',          body:'Performance is great but the status LED is too bright for hotel rooms. Tape over it solves it.', createdAt:'2026-05-17' },
+  { id:'r-012', productId:'v-002', userId:'u-kenji', userName:'Kenji Tanaka', rating:4, title:'LED could be dimmer at night',         body:'Performance is great but the status LED is too bright for hotel rooms. Tape over it solves it.', createdAt:'2026-05-17' },
 
   // v-003 StackPad
   { id:'r-020', productId:'v-003', userId:'u-alex', userName:'Alex Wong',   rating:5, title:'Replaced three chargers on my desk',    body:'iPhone, Apple Watch, and AirPods on one pad. Travel folded form makes hotel nightstands a non-issue.', createdAt:'2026-05-30' },
@@ -249,7 +279,7 @@ export const SEED_REVIEWS: Review[] = [
   // v-004 GaN Cube
   { id:'r-030', productId:'v-004', userId:'u-demo', userName:'Demo Voltic', rating:5, title:'Replaces my MacBook brick',             body:'M2 Pro 16-inch charges full speed. Frees up an entire outlet for travel.', createdAt:'2026-02-14' },
   { id:'r-031', productId:'v-004', userId:'u-alex', userName:'Alex Wong',   rating:5, title:'Tiny tiny tiny',                        body:'Smaller than the stock Apple 30W. Insane that this puts out 100W.', createdAt:'2026-03-02' },
-  { id:'r-032', productId:'v-004', userId:'u-demo', userName:'Demo Voltic', rating:5, title:'Runs cool under load',                  body:'Charged a MacBook + two phones for 45 min — barely warm. GaN III tech is the real deal.', createdAt:'2026-04-08' },
+  { id:'r-032', productId:'v-004', userId:'u-maya', userName:'Maya Lindqvist', rating:5, title:'Runs cool under load',                body:'Charged a MacBook + two phones for 45 min — barely warm. GaN III tech is the real deal.', createdAt:'2026-04-08' },
 
   // v-005 Lightning braided
   { id:'r-040', productId:'v-005', userId:'u-alex', userName:'Alex Wong',   rating:4, title:'Works as advertised',                   body:'No "this cable not certified" warnings on my iPhone 14. Braiding feels solid.', createdAt:'2026-04-29' },
@@ -258,8 +288,8 @@ export const SEED_REVIEWS: Review[] = [
   // v-101 Volt Buds Pro 2
   { id:'r-100', productId:'v-101', userId:'u-demo', userName:'Demo Voltic', rating:5, title:'ANC is shockingly good',                body:'Killed the noise of an A320 cabin completely. Adaptive transparency on the train is also excellent.', createdAt:'2026-05-22' },
   { id:'r-101', productId:'v-101', userId:'u-alex', userName:'Alex Wong',   rating:5, title:'Spatial audio is actually fun',         body:'Watched a Netflix movie on the iPad and the head-tracking spatial mix was eerie in a good way.', createdAt:'2026-05-28' },
-  { id:'r-102', productId:'v-101', userId:'u-demo', userName:'Demo Voltic', rating:4, title:'Case scratches easily',                 body:'Glossy plastic catches micro-scratches fast. Audio quality is unimpeachable though.', createdAt:'2026-06-01' },
-  { id:'r-103', productId:'v-101', userId:'u-alex', userName:'Alex Wong',   rating:5, title:'Battery survives a workday',            body:'On-and-off use through 8 hours of meetings + a workout = case at 40%. More than enough.', createdAt:'2026-06-10' },
+  { id:'r-102', productId:'v-101', userId:'u-priya', userName:'Priya Shah',  rating:4, title:'Case scratches easily',                 body:'Glossy plastic catches micro-scratches fast. Audio quality is unimpeachable though.', createdAt:'2026-06-01' },
+  { id:'r-103', productId:'v-101', userId:'u-kenji', userName:'Kenji Tanaka',rating:5, title:'Battery survives a workday',            body:'On-and-off use through 8 hours of meetings + a workout = case at 40%. More than enough.', createdAt:'2026-06-10' },
 
   // v-102 SoundWave Headset
   { id:'r-110', productId:'v-102', userId:'u-alex', userName:'Alex Wong',   rating:4, title:'Call quality is the highlight',        body:'Customers always sound clear. The ENC genuinely cuts cafe noise.', createdAt:'2026-04-02' },
@@ -284,7 +314,7 @@ export const SEED_REVIEWS: Review[] = [
   // v-301 AeroMag
   { id:'r-300', productId:'v-301', userId:'u-demo', userName:'Demo Voltic', rating:5, title:'Lightest MagSafe case I owned',         body:'Holds magnetic accessories with zero slippage and you barely feel it on the phone.', createdAt:'2026-03-30' },
   { id:'r-301', productId:'v-301', userId:'u-alex', userName:'Alex Wong',   rating:5, title:'Wallet sticks like glue',               body:'My MagSafe wallet has not slipped once even when pulling the phone hard out of jeans.', createdAt:'2026-04-15' },
-  { id:'r-302', productId:'v-301', userId:'u-demo', userName:'Demo Voltic', rating:4, title:'Camera bezel could be taller',          body:'Lenses don\'t touch the surface but I\'d feel better with another mm of clearance.', createdAt:'2026-05-08' },
+  { id:'r-302', productId:'v-301', userId:'u-maya', userName:'Maya Lindqvist', rating:4, title:'Camera bezel could be taller',        body:'Lenses don\'t touch the surface but I\'d feel better with another mm of clearance.', createdAt:'2026-05-08' },
 
   // v-302 Rugged Armor
   { id:'r-310', productId:'v-302', userId:'u-alex', userName:'Alex Wong',   rating:4, title:'Built like a tank',                    body:'Survived a fall off the rooftop terrace onto concrete. Some scuff marks on the case, phone is fine.', createdAt:'2026-05-19' },

@@ -88,11 +88,26 @@ async function prepare(name: CollName): Promise<void> {
         await Promise.all([
           col.createIndex({ id: 1 }, { unique: true }),
           col.createIndex({ productId: 1, createdAt: -1 }),
-          col.createIndex({ userId: 1 }),
-          // One review per (product, user). Closes the race where two
-          // concurrent submissions for the same SKU both insert.
-          col.createIndex({ productId: 1, userId: 1 }, { unique: true })
+          col.createIndex({ userId: 1 })
         ]);
+        // One review per (product, user). Closes the race where two
+        // concurrent submissions for the same SKU both insert.
+        //
+        // Built separately + swallowed on duplicate-key failure so an
+        // existing prod database that already holds duplicates doesn't
+        // crash every page render. The team can de-duplicate manually,
+        // then the next prep cycle will succeed and enforce going forward.
+        await col.createIndex(
+          { productId: 1, userId: 1 },
+          { unique: true }
+        ).catch((e: { code?: number; codeName?: string; message?: string }) => {
+          if (e?.code === 11000 || e?.codeName === 'DuplicateKey') {
+            // eslint-disable-next-line no-console
+            console.warn('[voltik] reviews unique (productId,userId) index skipped: pre-existing duplicates. De-dupe rows then redeploy.');
+            return;
+          }
+          throw e;
+        });
         break;
       case 'categories':
         await Promise.all([

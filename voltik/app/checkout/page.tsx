@@ -10,7 +10,7 @@ export default async function CheckoutPage() {
   return (
     <>
       <Navbar />
-      <main className="container-x py-10">
+      <main id="main" className="container-x py-10">
         <header className="mb-8">
           <span className="text-xs uppercase tracking-[0.18em] font-semibold text-brand">Step 2 of 2</span>
           <h1 className="font-display font-bold text-4xl sm:text-5xl mt-2">Secure checkout</h1>

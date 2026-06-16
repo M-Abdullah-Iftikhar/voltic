@@ -4,6 +4,9 @@ import { currentUser } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { Icon } from '@/components/Icons';
 import { ProductIllustration } from '@/components/ProductIllustration';
+import { OrderTracker } from '@/components/OrderTracker';
+import { CancelOrderButton } from './CancelOrderButton';
+import { ReorderButton } from './ReorderButton';
 import type { OrderStatus } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -16,13 +19,6 @@ const STATUS_STYLES: Record<OrderStatus, string> = {
   cancelled:  'bg-danger/15 text-danger'
 };
 
-const STEPS: { key: OrderStatus; label: string; icon: keyof typeof Icon }[] = [
-  { key: 'pending',    label: 'Placed',     icon: 'check' },
-  { key: 'processing', label: 'Processing', icon: 'spark' },
-  { key: 'shipped',    label: 'Shipped',    icon: 'truck' },
-  { key: 'delivered',  label: 'Delivered',  icon: 'check' }
-];
-
 export default async function AccountOrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: encId } = await params;
   const id = decodeURIComponent(encId);
@@ -33,12 +29,15 @@ export default async function AccountOrderDetailPage({ params }: { params: Promi
   const [order, products] = await Promise.all([db.getOrder(id), db.listProducts()]);
   if (!order) notFound();
 
-  // Ownership guard — only the buyer can read this.
-  const isOwner = order.userId === user.id || order.email?.toLowerCase() === user.email.toLowerCase();
+  // Ownership guard. Prefer matching by `userId` since it's the strong
+  // identity link; only fall back to email when the order has no
+  // userId attached (guest checkouts placed before account creation).
+  // This stops the "another account with my email happened to log in"
+  // scenario from ever leaking an order detail.
+  const isOwner = order.userId
+    ? order.userId === user.id
+    : order.email?.toLowerCase() === user.email.toLowerCase();
   if (!isOwner) notFound();
-
-  const stepIdx = STEPS.findIndex(s => s.key === order.status);
-  const cancelled = order.status === 'cancelled';
 
   const lines = order.lines || [];
   const lineRows = lines.map(l => {
@@ -46,6 +45,10 @@ export default async function AccountOrderDetailPage({ params }: { params: Promi
     return { line: l, product: p };
   });
   const subtotal = lineRows.reduce((s, r) => s + (r.product ? r.product.price * r.line.qty : 0), 0);
+  // For the reorder button — only re-add lines whose product still exists and has stock.
+  const availableIds = lineRows
+    .filter(r => r.product && r.product.stock > 0)
+    .map(r => r.line.id);
 
   return (
     <div className="space-y-6">
@@ -62,29 +65,44 @@ export default async function AccountOrderDetailPage({ params }: { params: Promi
         <span className={`chip ${STATUS_STYLES[order.status]} capitalize ml-auto`}>{order.status}</span>
       </header>
 
-      {/* Tracker */}
-      <div className="card p-6">
-        {cancelled ? (
-          <div className="flex items-center gap-3 text-danger">
-            <Icon.close width={18} height={18} /> This order was cancelled. If this was unexpected, contact support.
+      {/* Animated tracker — truck rolls along the route */}
+      <OrderTracker status={order.status} />
+
+      {/* Tracking number once admin enters it. */}
+      {order.tracking?.number && (
+        <div className="card p-5 flex items-start gap-3">
+          <span
+            className="grid place-items-center h-10 w-10 rounded-xl text-white shrink-0"
+            style={{ background: 'linear-gradient(135deg,rgb(var(--brand)),rgb(var(--brand2)))' }}
+          >
+            <Icon.truck width={18} height={18} />
+          </span>
+          <div className="flex-1 min-w-0">
+            <div className="text-xs uppercase tracking-wide text-muted font-semibold">{order.tracking.carrier}</div>
+            <div className="font-mono text-sm mt-0.5 break-all">{order.tracking.number}</div>
           </div>
-        ) : (
-          <ol className="grid grid-cols-4 gap-3">
-            {STEPS.map((s, i) => {
-              const done = i <= stepIdx;
-              const active = i === stepIdx;
-              const Glyph = Icon[s.icon];
-              return (
-                <li key={s.key} className="text-center">
-                  <div className={`mx-auto h-10 w-10 grid place-items-center rounded-full border-2 ${done ? 'bg-success border-success text-white' : 'border-line text-muted'} ${active ? 'ring-4 ring-success/20' : ''}`}>
-                    <Glyph width={16} height={16} />
-                  </div>
-                  <div className={`mt-2 text-xs font-semibold ${done ? 'text-ink' : 'text-muted'}`}>{s.label}</div>
-                </li>
-              );
-            })}
-          </ol>
+          {order.tracking.url && (
+            <a href={order.tracking.url} target="_blank" rel="noreferrer" className="btn-ghost text-xs shrink-0">
+              Track <Icon.arrow width={12} height={12} />
+            </a>
+          )}
+        </div>
+      )}
+
+      {/* Admin's customer-facing note. */}
+      {order.customerNote && (
+        <div className="card p-5 border-brand/30 bg-brand/5 flex items-start gap-3">
+          <Icon.spark width={16} height={16} className="text-brand shrink-0 mt-1" />
+          <div className="text-sm leading-relaxed text-ink whitespace-pre-line">{order.customerNote}</div>
+        </div>
+      )}
+
+      {/* Per-status actions — cancel while pending, reorder once the order is settled. */}
+      <div className="flex flex-wrap gap-3 justify-end">
+        {(order.status === 'delivered' || order.status === 'cancelled') && lines.length > 0 && (
+          <ReorderButton lines={lines} availableIds={availableIds} />
         )}
+        {order.status === 'pending' && <CancelOrderButton orderId={order.id} />}
       </div>
 
       {/* Items */}
@@ -102,7 +120,7 @@ export default async function AccountOrderDetailPage({ params }: { params: Promi
                   <div className="h-14 w-14 rounded-xl bg-elev grid place-items-center text-muted shrink-0"><Icon.box width={20} height={20} /></div>
                 )}
                 <div className="flex-1 min-w-0">
-                  <Link href={product ? `/product/${product.id}` : '/shop'} className="font-semibold hover:text-brand line-clamp-1">
+                  <Link href={product ? `/product/${product.slug || product.id}` : '/shop'} className="font-semibold hover:text-brand line-clamp-1">
                     {product?.name || 'Discontinued product'}
                   </Link>
                   <div className="text-xs text-muted">Qty {line.qty}{product ? ` · $${product.price.toFixed(2)} each` : ''}</div>
@@ -111,7 +129,7 @@ export default async function AccountOrderDetailPage({ params }: { params: Promi
                   <div className="text-right">
                     <div className="font-bold">${(product.price * line.qty).toFixed(2)}</div>
                     {order.status === 'delivered' && (
-                      <Link href={`/product/${product.id}#reviews`} className="text-[11px] text-brand hover:underline">Write review</Link>
+                      <Link href={`/product/${product.slug || product.id}#reviews`} className="text-[11px] text-brand hover:underline">Write review</Link>
                     )}
                   </div>
                 )}

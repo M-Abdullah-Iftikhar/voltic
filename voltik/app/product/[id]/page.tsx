@@ -1,36 +1,108 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import type { Metadata } from 'next';
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
 import { ProductCard } from '@/components/ProductCard';
-import { ProductIllustration } from '@/components/ProductIllustration';
 import { Icon } from '@/components/Icons';
 import { db } from '@/lib/db';
 import { enrich, enrichOne } from '@/lib/reviews';
 import { AddToCartPanel } from './AddToCartPanel';
 import { FavoriteToggle } from './FavoriteToggle';
 import { ReviewsSection } from './ReviewsSection';
+import { StickyAddToCart } from './StickyAddToCart';
+import { BundleSuggestion } from '@/components/BundleSuggestion';
+import { RecentlyViewed, TrackVisit } from '@/components/RecentlyViewed';
+import { WhyWeLoveIt } from '@/components/WhyWeLoveIt';
+import { TrustBadgesRow } from '@/components/TrustBadgesRow';
+import { VariantSelector } from '@/components/VariantSelector';
+import { ProductGallery } from '@/components/ProductGallery';
+import { ARViewButton } from '@/components/ARViewButton';
 
 export const dynamic = 'force-dynamic';
 
+/** Per-product OG + meta tags. The `id` route param can be either the
+ *  slug or the raw id — db.getProductByIdOrSlug handles both. */
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  const p = await db.getProductByIdOrSlug(id);
+  if (!p) return { title: 'Product not found · Voltik' };
+  return {
+    title: `${p.name} · Voltik`,
+    description: p.description.slice(0, 160),
+    openGraph: {
+      title: p.name,
+      description: p.description.slice(0, 160),
+      type: 'website'
+    }
+  };
+}
+
 export default async function ProductPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const raw = await db.getProduct(id);
+  const raw = await db.getProductByIdOrSlug(id);
   if (!raw) notFound();
 
-  const [product, reviews] = await Promise.all([
+  const [product, allReviews, allOrders] = await Promise.all([
     enrichOne(raw),
-    db.listReviewsForProduct(id)
+    db.listReviewsForProduct(id),
+    db.listOrders()
   ]);
+  // Hidden reviews stay in the DB so the admin can restore them, but never
+  // render publicly. The product's rating/count is already computed without them.
+  const reviews = allReviews.filter(r => !r.hidden);
 
   const all = await db.listProducts();
-  const related = await enrich(all.filter(p => p.category === product.category && p.id !== product.id).slice(0, 4));
+  const enrichedAll = await enrich(all);
+  const related = enrichedAll.filter(p => p.category === product.category && p.id !== product.id).slice(0, 4);
   const discount = product.oldPrice ? Math.round(((product.oldPrice - product.price) / product.oldPrice) * 100) : 0;
+
+  // Set of userIds that have actually bought THIS product (verified purchase).
+  // We also track emails for guest-order accounts where userId wasn't attached.
+  const verifiedUserIds = new Set<string>();
+  const verifiedEmails  = new Set<string>();
+  for (const o of allOrders) {
+    if (o.status === 'cancelled') continue;
+    if (!o.lines?.some(l => l.id === product.id)) continue;
+    if (o.userId) verifiedUserIds.add(o.userId);
+    if (o.email)  verifiedEmails.add(o.email.toLowerCase());
+  }
+
+  // Schema.org Product JSON-LD for Google rich results.
+  const jsonLd: Record<string, unknown> = {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: product.name,
+    description: product.description,
+    sku: product.sku,
+    brand: { '@type': 'Brand', name: product.brand },
+    category: product.category,
+    offers: {
+      '@type': 'Offer',
+      price: product.price.toFixed(2),
+      priceCurrency: 'USD',
+      availability: product.stock > 0
+        ? 'https://schema.org/InStock'
+        : 'https://schema.org/OutOfStock'
+    }
+  };
+  if (product.reviewsCount > 0) {
+    jsonLd.aggregateRating = {
+      '@type': 'AggregateRating',
+      ratingValue: product.rating.toFixed(1),
+      reviewCount: product.reviewsCount
+    };
+  }
 
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <Navbar />
-      <main className="container-x py-10">
+      <TrackVisit productId={product.id} />
+      <main id="main" className="container-x py-10">
         {/* Breadcrumbs */}
         <nav className="text-xs text-muted mb-6 flex items-center gap-2 flex-wrap">
           <Link href="/" className="hover:text-ink">Home</Link>
@@ -43,16 +115,14 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
         </nav>
 
         <div className="grid lg:grid-cols-[1fr_1fr] gap-10">
-          {/* Gallery */}
+          {/* Gallery — angles, 360° spin, video, click-to-zoom modal,
+              and Amazon-style hover magnifier all live in this one
+              composite. See `ProductGallery` for the breakdown. */}
           <div>
-            <ProductIllustration category={product.category} icon={product.icon} className="aspect-square rounded-3xl" size={260} />
-            <div className="grid grid-cols-4 gap-3 mt-4">
-              {[0, 1, 2, 3].map(i => (
-                <div key={i} className={`rounded-xl border ${i === 0 ? 'border-brand' : 'border-line'} overflow-hidden`}>
-                  <ProductIllustration category={product.category} icon={product.icon} className="aspect-square" size={42} />
-                </div>
-              ))}
-            </div>
+            <ProductGallery product={product} />
+            {/* AR view — only renders for products where seeing them
+                "in your room" actually helps (cases, stands, audio). */}
+            <ARViewButton product={product} />
           </div>
 
           {/* Info */}
@@ -81,6 +151,8 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
 
             <p className="text-muted mt-5 leading-relaxed">{product.description}</p>
 
+            <WhyWeLoveIt product={product} forceShow />
+
             <div className="mt-6 flex items-baseline gap-3">
               <span className="text-4xl font-bold gradient-text">${product.price.toFixed(2)}</span>
               {product.oldPrice && (
@@ -91,7 +163,19 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
               )}
             </div>
 
+            <VariantSelector product={product} />
+
             <AddToCartPanel productId={product.id} stock={product.stock} />
+            {/* Trust badges — sit directly under the CTA so commitments land
+                where the buyer's eye already is. */}
+            <TrustBadgesRow />
+            {/* Sentinel watched by StickyAddToCart to know when the in-flow CTA is offscreen */}
+            <div id="voltik-sticky-cta-sentinel" aria-hidden style={{ height: 1 }} />
+
+            {/* Bundle suggestion — pair with first related product if any */}
+            {related[0] && (
+              <BundleSuggestion current={product} companion={related[0]} />
+            )}
 
             {/* Features */}
             <div className="card mt-8 p-5">
@@ -105,23 +189,6 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
                 ))}
               </ul>
             </div>
-
-            {/* Guarantee strip */}
-            <div className="mt-5 grid grid-cols-3 gap-2 text-xs">
-              {[
-                { icon: 'truck',   l: 'Free shipping' },
-                { icon: 'refresh', l: '30-day returns' },
-                { icon: 'shield',  l: '2-year warranty' }
-              ].map(it => {
-                const G = (Icon as any)[it.icon];
-                return (
-                  <div key={it.l} className="card p-3 flex items-center gap-2">
-                    <G width={16} height={16} className="text-brand" />
-                    <span className="text-muted">{it.l}</span>
-                  </div>
-                );
-              })}
-            </div>
           </div>
         </div>
 
@@ -131,7 +198,9 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
             productId={product.id}
             initialReviews={reviews}
             initialRating={product.rating}
-            initialCount={product.reviewsCount} />
+            initialCount={product.reviewsCount}
+            verifiedUserIds={Array.from(verifiedUserIds)}
+            verifiedEmails={Array.from(verifiedEmails)} />
         </section>
 
         {/* Related */}
@@ -143,7 +212,11 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
             </div>
           </section>
         )}
+
+        {/* Recently viewed strip — hides itself if there's nothing */}
+        <RecentlyViewed catalog={enrichedAll} excludeId={product.id} />
       </main>
+      <StickyAddToCart product={product} />
       <Footer />
     </>
   );

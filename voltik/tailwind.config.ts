@@ -19,13 +19,14 @@ const config: Config = {
         brand:     'rgb(var(--brand) / <alpha-value>)',
         brand2:    'rgb(var(--brand2) / <alpha-value>)',
         accent:    'rgb(var(--accent) / <alpha-value>)',
+        accent2:   'rgb(var(--accent2) / <alpha-value>)',
         success:   'rgb(var(--success) / <alpha-value>)',
         danger:    'rgb(var(--danger) / <alpha-value>)',
         warn:      'rgb(var(--warn) / <alpha-value>)'
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
-        display: ['"Space Grotesk"', 'Inter', 'sans-serif'],
+        sans: ['var(--font-sans)', 'Inter', 'system-ui', 'sans-serif'],
+        display: ['var(--font-display)', '"Geist"', 'Inter', 'sans-serif'],
         mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace']
       },
       boxShadow: {
@@ -41,13 +42,17 @@ const config: Config = {
         floaty: { '0%,100%':{ transform:'translateY(0)' }, '50%':{ transform:'translateY(-8px)' } },
         shine:  { '0%':{ backgroundPosition:'-200% 0' }, '100%':{ backgroundPosition:'200% 0' } },
         slidein:{ '0%':{ opacity:'0', transform:'translateY(12px)' }, '100%':{ opacity:'1', transform:'translateY(0)' } },
-        pulseRing: { '0%':{ transform:'scale(.85)', opacity:'.6' }, '100%':{ transform:'scale(1.6)', opacity:'0' } }
+        fadein: { '0%':{ opacity:'0' }, '100%':{ opacity:'1' } },
+        pulseRing: { '0%':{ transform:'scale(.85)', opacity:'.6' }, '100%':{ transform:'scale(1.6)', opacity:'0' } },
+        marqueeLeft: { '0%':{ transform:'translateX(0)' }, '100%':{ transform:'translateX(-50%)' } }
       },
       animation: {
         floaty: 'floaty 6s ease-in-out infinite',
         shine:  'shine 3s linear infinite',
         slidein:'slidein .5s ease-out both',
-        pulseRing: 'pulseRing 1.6s ease-out infinite'
+        fadein: 'fadein .6s ease-out both',
+        pulseRing: 'pulseRing 1.6s ease-out infinite',
+        marqueeLeft: 'marqueeLeft 40s linear infinite'
       }
     }
   },

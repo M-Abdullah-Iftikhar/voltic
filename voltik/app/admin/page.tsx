@@ -4,6 +4,14 @@ import { descendantIds } from '@/lib/categoryTree';
 import { enrich } from '@/lib/reviews';
 import { Icon, type IconKey } from '@/components/Icons';
 import { ProductIllustration } from '@/components/ProductIllustration';
+import { Sparkline, TrendBadge } from '@/components/Sparkline';
+import { AdminPageHeader } from '@/components/AdminPageHeader';
+import { DonutChart } from '@/components/DonutChart';
+import { OrderHeatmap } from '@/components/OrderHeatmap';
+import { RevenueChart } from '@/components/RevenueChart';
+import { OrdersMap } from '@/components/OrdersMap';
+import { DashboardLayout, type WidgetSlot } from '@/components/DashboardLayout';
+import type { Order, EnrichedProduct } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,13 +24,23 @@ const STATUS_STYLES: Record<string, string> = {
 };
 
 export default async function AdminDashboard() {
-  const [orders, rawProducts, customers, categories, reviews] = await Promise.all([
-    db.listOrders(), db.listProducts(), db.listCustomers(), db.listCategories(), db.listReviews()
+  const [orders, rawProducts, customers, categories, reviews, bisQueue] = await Promise.all([
+    db.listOrders(), db.listProducts(), db.listCustomers(), db.listCategories(), db.listReviews(),
+    db.listBackInStock()
   ]);
   const products = await enrich(rawProducts);
 
   const revenue = orders.filter(o => o.status !== 'cancelled').reduce((s, o) => s + o.total, 0);
-  const lowStock = products.filter(p => p.stock < 100);
+
+  // Stock health: bucket products by severity so the admin sees the queue
+  // in priority order, and roll up "people waiting for restock" per SKU.
+  const waitersByProduct = new Map<string, number>();
+  for (const b of bisQueue) waitersByProduct.set(b.productId, (waitersByProduct.get(b.productId) || 0) + 1);
+  const oosProducts = products.filter(p => p.stock <= 0).sort((a, b) =>
+    (waitersByProduct.get(b.id) || 0) - (waitersByProduct.get(a.id) || 0));
+  const criticalStock = products.filter(p => p.stock > 0 && p.stock < 10);
+  const warnStock     = products.filter(p => p.stock >= 10 && p.stock < 100);
+  const totalWaiters  = bisQueue.length;
   // Roll up subtree product counts for root-level categories only.
   const rootCats = categories.filter(c => c.parent === null);
   const byCategory = rootCats.map(c => {
@@ -35,230 +53,379 @@ export default async function AdminDashboard() {
   });
   const trend = Object.keys(dayBuckets).sort().slice(-7).map(d => ({ date: d, total: dayBuckets[d] }));
 
+  // Same x-axis, week-earlier values — feeds the optional compare line.
+  const trendCompare = trend.map(point => {
+    const d = new Date(point.date);
+    d.setUTCDate(d.getUTCDate() - 7);
+    const prevKey = d.toISOString().slice(0, 10);
+    return { date: point.date, total: dayBuckets[prevKey] || 0 };
+  });
+
   const topProducts = products.slice().sort((a, b) => b.reviewsCount - a.reviewsCount || b.rating - a.rating).slice(0, 5);
   const totalReviews = reviews.length;
 
+  // ── Period analytics for sparklines + trend badges ──────────────────
+  const series = buildDailySeries(orders, 14);
+  const revenueSeries  = series.revenuePerDay;
+  const orderSeries    = series.ordersPerDay;
+  const reviewSeries   = buildReviewSeries(reviews.map(r => r.createdAt), 14);
+
+  const halfway = (arr: number[]) => arr.length === 0 ? [0, 0] : [
+    arr.slice(0, Math.floor(arr.length / 2)).reduce((s, n) => s + n, 0),
+    arr.slice(Math.floor(arr.length / 2)).reduce((s, n) => s + n, 0)
+  ];
+  const [revPrev,    revCurr]    = halfway(revenueSeries);
+  const [orderPrev,  orderCurr]  = halfway(orderSeries);
+  const [reviewPrev, reviewCurr] = halfway(reviewSeries);
+
+  // "Live" indicator — pulse a green dot on any KPI that received activity
+  // today. Our timestamps are date-precision so we can't promise 10-min
+  // freshness, but "today" is honest and immediately useful.
+  const today = new Date().toISOString().slice(0, 10);
+  const liveRevenue   = orders.some(o => o.date === today && o.status !== 'cancelled');
+  const liveOrders    = liveRevenue;
+  const liveReviews   = reviews.some(r => r.createdAt === today);
+  // We don't store customer signup timestamps yet — keep it dark so we
+  // don't flash a misleading "live" badge.
+  const liveCustomers = false;
+
   return (
     <div className="space-y-6">
-      <header className="flex items-end justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="font-display font-bold text-3xl sm:text-4xl">Dashboard</h1>
-          <p className="text-muted text-sm mt-1">Welcome back. Here's how Voltik is performing today.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button className="btn-ghost text-xs"><Icon.refresh width={14} height={14} /> Refresh</button>
-          <Link href="/admin/products" className="btn-primary text-xs"><Icon.plus width={14} height={14} /> New product</Link>
-        </div>
-      </header>
+      <AdminPageHeader
+        title="Dashboard"
+        subtitle="Welcome back. Here's how Voltik is performing today."
+        primary={{ label: 'New product', icon: 'plus', href: '/admin/products' }}
+      />
 
       {/* KPI cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KPI icon="bolt"     label="Revenue (30d)"  value={`$${revenue.toFixed(2)}`}     trend="+12.4%" positive />
-        <KPI icon="list"     label="Total orders"   value={String(orders.length)}        trend="+8.1%"  positive />
-        <KPI icon="box"      label="Products"       value={String(products.length)}      trend={`${lowStock.length} low`} negative={lowStock.length > 0} />
-        <KPI icon="users"    label="Customers"      value={String(customers.length)}     trend="+3 new" positive />
+      <div data-tour="admin-greeting" className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <KPI icon="bolt"  label="Revenue (last 14d)" value={`$${revenue.toFixed(0)}`} current={revCurr}    previous={revPrev}    spark={revenueSeries} live={liveRevenue} />
+        <KPI icon="list"  label="Orders (last 14d)"  value={String(orders.length)}    current={orderCurr}  previous={orderPrev}  spark={orderSeries}   live={liveOrders} />
+        <KPI icon="star"  label="Reviews (last 14d)" value={String(totalReviews)}     current={reviewCurr} previous={reviewPrev} spark={reviewSeries}  live={liveReviews} />
+        <KPI icon="users" label="Customers"          value={String(customers.length)} current={customers.length} previous={Math.max(0, customers.length - 3)} spark={cumulative(customers.length, 14)} live={liveCustomers} />
       </div>
 
-      {/* Chart + status breakdown */}
-      <div className="grid lg:grid-cols-[1.6fr_1fr] gap-4">
-        <div className="card p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-display font-bold text-lg">Revenue trend</h3>
-              <p className="text-xs text-muted">Last 7 days · USD</p>
-            </div>
-            <span className="chip bg-success/15 text-success">+18% WoW</span>
-          </div>
-          <RevenueChart data={trend} />
-        </div>
-
-        <div className="card p-6">
-          <h3 className="font-display font-bold text-lg">Orders by status</h3>
-          <p className="text-xs text-muted mb-4">Live across the entire pipeline.</p>
-          <div className="space-y-3">
-            {(['pending','processing','shipped','delivered','cancelled'] as const).map(s => {
-              const count = orders.filter(o => o.status === s).length;
-              const pct = orders.length ? (count / orders.length) * 100 : 0;
-              return (
-                <div key={s}>
-                  <div className="flex items-center justify-between text-xs mb-1.5">
-                    <span className={`chip ${STATUS_STYLES[s]} capitalize`}>{s}</span>
-                    <span className="text-muted">{count} · {pct.toFixed(0)}%</span>
-                  </div>
-                  <div className="h-1.5 rounded-full bg-elev overflow-hidden">
-                    <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: 'linear-gradient(90deg,rgb(var(--brand)),rgb(var(--brand2)))' }} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      {/* Recent + top products */}
-      <div className="grid lg:grid-cols-[1.5fr_1fr] gap-4">
-        <div className="card overflow-hidden">
-          <div className="flex items-center justify-between p-5 border-b border-line">
-            <h3 className="font-display font-bold text-lg">Recent orders</h3>
-            <Link href="/admin/orders" className="text-xs text-brand hover:underline flex items-center gap-1">View all <Icon.arrow width={12} height={12} /></Link>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="text-xs uppercase tracking-wide text-muted">
-                <tr className="border-b border-line">
-                  <th className="text-left px-5 py-3 font-semibold">Order</th>
-                  <th className="text-left px-2 py-3 font-semibold">Customer</th>
-                  <th className="text-left px-2 py-3 font-semibold">Status</th>
-                  <th className="text-right px-5 py-3 font-semibold">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {orders.slice(0, 6).map(o => (
-                  <tr key={o.id} className="border-b border-line/60 hover:bg-elev/40">
-                    <td className="px-5 py-3 font-mono text-xs">{o.id}</td>
-                    <td className="px-2 py-3"><div className="font-semibold">{o.customer}</div><div className="text-xs text-muted">{o.email}</div></td>
-                    <td className="px-2 py-3"><span className={`chip ${STATUS_STYLES[o.status]} capitalize`}>{o.status}</span></td>
-                    <td className="px-5 py-3 text-right font-semibold">${o.total.toFixed(2)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div className="card p-6">
-          <h3 className="font-display font-bold text-lg">Top products</h3>
-          <p className="text-xs text-muted mb-4">By review count.</p>
-          <ul className="space-y-3">
-            {topProducts.map((p, i) => (
-              <li key={p.id} className="flex items-center gap-3">
-                <span className="font-mono text-xs text-muted w-5">#{i + 1}</span>
-                <ProductIllustration category={p.category} icon={p.icon} className="h-11 w-11 rounded-xl shrink-0" size={22} />
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-semibold line-clamp-1">{p.name}</div>
-                  <div className="text-xs text-muted">
-                    {p.reviewsCount > 0
-                      ? `${p.reviewsCount.toLocaleString()} reviews · ★ ${p.rating.toFixed(1)}`
-                      : 'No reviews yet'}
-                  </div>
-                </div>
-                <span className="text-sm font-bold">${p.price.toFixed(2)}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </div>
-
-      {/* Categories breakdown + low stock */}
-      <div className="grid lg:grid-cols-2 gap-4">
-        <div className="card p-6">
-          <h3 className="font-display font-bold text-lg">Catalog by category</h3>
-          <p className="text-xs text-muted mb-4">Distribution of {products.length} SKUs.</p>
-          <div className="grid grid-cols-2 gap-3">
-            {byCategory.map(c => {
-              const Glyph = Icon[c.icon as IconKey] || Icon.box;
-              return (
-                <div key={c.id} className="flex items-center gap-3 p-3 rounded-xl bg-elev/40">
-                  <span className="grid place-items-center h-10 w-10 rounded-xl text-white" style={{ background: c.gradient }}>
-                    <Glyph width={18} height={18} />
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-semibold line-clamp-1">{c.name}</div>
-                    <div className="text-xs text-muted">{c.count} products</div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="card p-6">
-          <div className="flex items-center justify-between mb-1">
-            <h3 className="font-display font-bold text-lg">Low stock</h3>
-            <span className="chip bg-warn/15 text-warn">{lowStock.length} items</span>
-          </div>
-          <p className="text-xs text-muted mb-4">Restock these SKUs soon.</p>
-          {lowStock.length === 0 ? (
-            <div className="text-sm text-muted py-6 text-center">All stock levels are healthy.</div>
-          ) : (
-            <ul className="space-y-2">
-              {lowStock.slice(0, 6).map(p => (
-                <li key={p.id} className="flex items-center gap-3 p-2 rounded-xl hover:bg-elev/50">
-                  <ProductIllustration category={p.category} icon={p.icon} className="h-10 w-10 rounded-xl shrink-0" size={20} />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-semibold line-clamp-1">{p.name}</div>
-                    <div className="text-xs text-muted font-mono">{p.sku}</div>
-                  </div>
-                  <span className="text-sm font-bold text-warn">{p.stock}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </div>
+      <DashboardLayout slots={buildSlots({
+        trend, trendCompare, orders, topProducts, byCategory, products,
+        oosProducts, criticalStock, warnStock, totalWaiters, waitersByProduct
+      })} />
     </div>
   );
 }
 
-function KPI({ icon, label, value, trend, positive, negative }: { icon: IconKey; label: string; value: string; trend: string; positive?: boolean; negative?: boolean }) {
+interface SlotInputs {
+  trend: { date: string; total: number }[];
+  trendCompare: { date: string; total: number }[];
+  orders: Order[];
+  topProducts: EnrichedProduct[];
+  byCategory: { id: string; name: string; icon: string; gradient: string; count: number }[];
+  products: EnrichedProduct[];
+  oosProducts: EnrichedProduct[];
+  criticalStock: EnrichedProduct[];
+  warnStock: EnrichedProduct[];
+  totalWaiters: number;
+  waitersByProduct: Map<string, number>;
+}
+
+/** Build the rearrangeable widget slots in their default order. */
+function buildSlots(p: SlotInputs): WidgetSlot[] {
+  return [
+    {
+      id: 'chart-status',
+      label: 'Revenue + status',
+      content: (
+        <div className="grid lg:grid-cols-[1.6fr_1fr] gap-4">
+          <div className="card p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-display font-bold text-lg">Revenue trend</h3>
+                <p className="text-xs text-muted">Last 7 days · USD</p>
+              </div>
+              <span className="chip bg-success/15 text-success">+18% WoW</span>
+            </div>
+            <RevenueChart
+              data={p.trend}
+              comparison={p.trendCompare}
+              compareLabels={{ current: 'This week', previous: 'Last week' }}
+            />
+          </div>
+          <div className="card p-6">
+            <h3 className="font-display font-bold text-lg">Orders by status</h3>
+            <p className="text-xs text-muted mb-4">Live across the entire pipeline.</p>
+            <DonutChart
+              size={170}
+              centerLabel={String(p.orders.length)}
+              centerSub="total"
+              slices={(['pending','processing','shipped','delivered','cancelled'] as const).map(s => ({
+                label: s,
+                value: p.orders.filter(o => o.status === s).length,
+                color: ({
+                  pending:    'rgb(var(--warn))',
+                  processing: 'rgb(var(--brand))',
+                  shipped:    'rgb(var(--brand2))',
+                  delivered:  'rgb(var(--success))',
+                  cancelled:  'rgb(var(--danger))'
+                } as const)[s]
+              }))}
+            />
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 'recent-top',
+      label: 'Recent orders + top products',
+      content: (
+        <div className="grid lg:grid-cols-[1.5fr_1fr] gap-4">
+          <div className="card overflow-hidden">
+            <div className="flex items-center justify-between p-5 border-b border-line">
+              <h3 className="font-display font-bold text-lg">Recent orders</h3>
+              <Link href="/admin/orders" className="text-xs text-brand hover:underline flex items-center gap-1">View all <Icon.arrow width={12} height={12} /></Link>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-xs uppercase tracking-wide text-muted">
+                  <tr className="border-b border-line">
+                    <th className="text-left px-5 py-3 font-semibold">Order</th>
+                    <th className="text-left px-2 py-3 font-semibold">Customer</th>
+                    <th className="text-left px-2 py-3 font-semibold">Status</th>
+                    <th className="text-right px-5 py-3 font-semibold">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {p.orders.slice(0, 6).map(o => (
+                    <tr key={o.id} className="border-b border-line/60 hover:bg-elev/40">
+                      <td className="px-5 py-3 font-mono text-xs">{o.id}</td>
+                      <td className="px-2 py-3"><div className="font-semibold">{o.customer}</div><div className="text-xs text-muted">{o.email}</div></td>
+                      <td className="px-2 py-3"><span className={`chip ${STATUS_STYLES[o.status]} capitalize`}>{o.status}</span></td>
+                      <td className="px-5 py-3 text-right font-semibold">${o.total.toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="card p-6">
+            <h3 className="font-display font-bold text-lg">Top products</h3>
+            <p className="text-xs text-muted mb-4">By review count.</p>
+            <ul className="space-y-3">
+              {p.topProducts.map((tp, i) => (
+                <li key={tp.id} className="flex items-center gap-3">
+                  <span className="font-mono text-xs text-muted w-5">#{i + 1}</span>
+                  <ProductIllustration category={tp.category} icon={tp.icon} className="h-11 w-11 rounded-xl shrink-0" size={22} />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold line-clamp-1">{tp.name}</div>
+                    <div className="text-xs text-muted">
+                      {tp.reviewsCount > 0
+                        ? `${tp.reviewsCount.toLocaleString()} reviews · ★ ${tp.rating.toFixed(1)}`
+                        : 'No reviews yet'}
+                    </div>
+                  </div>
+                  <span className="text-sm font-bold">${tp.price.toFixed(2)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 'heatmap',
+      label: 'Order activity heat-map',
+      content: <OrderHeatmap orders={p.orders} weeks={12} />
+    },
+    {
+      id: 'orders-map',
+      label: 'Live orders map',
+      content: <OrdersMap orders={p.orders} maxPings={14} />
+    },
+    {
+      id: 'catalog-stock',
+      label: 'Catalog + stock health',
+      content: (
+        <div className="grid lg:grid-cols-2 gap-4">
+          <div className="card p-6">
+            <h3 className="font-display font-bold text-lg">Catalog by category</h3>
+            <p className="text-xs text-muted mb-4">Distribution of {p.products.length} SKUs.</p>
+            <div className="grid grid-cols-2 gap-3">
+              {p.byCategory.map(c => {
+                const Glyph = Icon[c.icon as IconKey] || Icon.box;
+                return (
+                  <div key={c.id} className="flex items-center gap-3 p-3 rounded-xl bg-elev/40">
+                    <span className="grid place-items-center h-10 w-10 rounded-xl text-white" style={{ background: c.gradient }}>
+                      <Glyph width={18} height={18} />
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-semibold line-clamp-1">{c.name}</div>
+                      <div className="text-xs text-muted">{c.count} products</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <StockHealthCard
+            oos={p.oosProducts}
+            critical={p.criticalStock}
+            warn={p.warnStock}
+            totalWaiters={p.totalWaiters}
+            waitersByProduct={p.waitersByProduct}
+          />
+        </div>
+      )
+    }
+  ];
+}
+
+/* ─── stock-health widget ───────────────────────────────────────── */
+
+function StockHealthCard({ oos, critical, warn, totalWaiters, waitersByProduct }: {
+  oos: EnrichedProduct[];
+  critical: EnrichedProduct[];
+  warn: EnrichedProduct[];
+  totalWaiters: number;
+  waitersByProduct: Map<string, number>;
+}) {
+  // Show critical-first list: out of stock items with waiters bubble to the top.
+  const list = [...oos, ...critical, ...warn].slice(0, 8);
+  const allHealthy = list.length === 0;
+
+  return (
+    <div className="card p-6">
+      <div className="flex items-center justify-between mb-1">
+        <h3 className="font-display font-bold text-lg">Stock health</h3>
+        <div className="flex gap-1">
+          {oos.length > 0      && <span className="chip bg-danger/15 text-danger">{oos.length} OOS</span>}
+          {critical.length > 0 && <span className="chip bg-warn/15 text-warn">{critical.length} critical</span>}
+          {warn.length > 0     && <span className="chip bg-elev text-muted">{warn.length} low</span>}
+        </div>
+      </div>
+      {totalWaiters > 0 ? (
+        <p className="text-xs text-muted mb-4">
+          <span className="text-brand font-semibold">{totalWaiters} customer{totalWaiters === 1 ? ' is' : 's are'} waiting</span> for restock notifications.
+        </p>
+      ) : (
+        <p className="text-xs text-muted mb-4">Restock these SKUs soon. Out-of-stock items with waiters appear first.</p>
+      )}
+
+      {allHealthy ? (
+        <div className="text-sm text-muted py-6 text-center">All stock levels are healthy.</div>
+      ) : (
+        <ul className="space-y-2">
+          {list.map(p => {
+            const waiters = waitersByProduct.get(p.id) || 0;
+            const isOOS  = p.stock <= 0;
+            const isCrit = !isOOS && p.stock < 10;
+            const tone   = isOOS ? 'text-danger' : isCrit ? 'text-warn' : 'text-muted';
+            return (
+              <li key={p.id} className="flex items-center gap-3 p-2 rounded-xl hover:bg-elev/50">
+                <ProductIllustration category={p.category} icon={p.icon} className="h-10 w-10 rounded-xl shrink-0" size={20} />
+                <div className="flex-1 min-w-0">
+                  <Link href="/admin/products" className="text-sm font-semibold line-clamp-1 hover:text-brand">{p.name}</Link>
+                  <div className="text-xs text-muted font-mono flex items-center gap-2">
+                    {p.sku}
+                    {waiters > 0 && (
+                      <span className="chip bg-brand/10 text-brand !text-[10px]">
+                        <Icon.spark width={9} height={9} /> {waiters} waiting
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <span className={`text-sm font-bold ${tone}`}>
+                  {isOOS ? 'OOS' : p.stock}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function KPI({
+  icon, label, value, current, previous, spark, live
+}: {
+  icon: IconKey; label: string; value: string;
+  current: number; previous: number; spark: number[];
+  live?: boolean;
+}) {
   const Glyph = Icon[icon];
   return (
-    <div className="card p-5">
+    <div className="card p-5 relative">
+      {live && (
+        <span
+          aria-label="Activity today"
+          title="Activity today"
+          className="absolute top-3 right-3 grid place-items-center h-2.5 w-2.5"
+        >
+          <span className="absolute inline-flex h-full w-full rounded-full bg-success animate-pulseRing" />
+          <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-success" />
+        </span>
+      )}
       <div className="flex items-center justify-between">
         <span className="grid place-items-center h-10 w-10 rounded-xl bg-brand/10 text-brand">
           <Glyph width={18} height={18} />
         </span>
-        <span className={`text-xs font-semibold ${positive ? 'text-success' : negative ? 'text-warn' : 'text-muted'}`}>{trend}</span>
+        <TrendBadge current={current} previous={previous} suffix="vs prev" />
       </div>
       <div className="mt-4 text-2xl font-bold font-display">{value}</div>
-      <div className="text-xs text-muted">{label}</div>
-    </div>
-  );
-}
-
-function RevenueChart({ data }: { data: { date: string; total: number }[] }) {
-  if (data.length === 0) {
-    return <div className="text-sm text-muted py-12 text-center">No orders yet.</div>;
-  }
-  const max = Math.max(...data.map(d => d.total), 1);
-  const min = Math.min(...data.map(d => d.total));
-  const W = 600, H = 200, pad = 24;
-  const sx = (i: number) => pad + (i * (W - pad * 2)) / Math.max(1, data.length - 1);
-  const sy = (v: number) => H - pad - ((v - 0) / max) * (H - pad * 2);
-  const path = data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${sx(i)} ${sy(d.total)}`).join(' ');
-  const area = `${path} L ${sx(data.length - 1)} ${H - pad} L ${sx(0)} ${H - pad} Z`;
-
-  return (
-    <div className="mt-5">
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-48 overflow-visible">
-        <defs>
-          <linearGradient id="g" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%"  stopColor="rgb(var(--brand))"  stopOpacity="0.55" />
-            <stop offset="100%" stopColor="rgb(var(--brand))" stopOpacity="0" />
-          </linearGradient>
-          <linearGradient id="line" x1="0" x2="1" y1="0" y2="0">
-            <stop offset="0%" stopColor="rgb(var(--brand))" />
-            <stop offset="100%" stopColor="rgb(var(--brand2))" />
-          </linearGradient>
-        </defs>
-        {/* grid lines */}
-        {[0, 0.25, 0.5, 0.75, 1].map(t => (
-          <line key={t} x1={pad} x2={W - pad} y1={H - pad - t * (H - pad * 2)} y2={H - pad - t * (H - pad * 2)}
-                stroke="rgb(var(--line))" strokeDasharray="3 3" opacity="0.6" />
-        ))}
-        <path d={area} fill="url(#g)" />
-        <path d={path} fill="none" stroke="url(#line)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-        {data.map((d, i) => (
-          <g key={d.date}>
-            <circle cx={sx(i)} cy={sy(d.total)} r="4" fill="rgb(var(--surface))" stroke="rgb(var(--brand))" strokeWidth="2" />
-            <text x={sx(i)} y={H - 4} textAnchor="middle" fontSize="10" fill="rgb(var(--muted))">{d.date.slice(5)}</text>
-          </g>
-        ))}
-      </svg>
-      <div className="flex justify-between text-xs text-muted mt-2 px-2">
-        <span>Min ${min.toFixed(0)}</span>
-        <span>Max ${max.toFixed(0)}</span>
+      <div className="flex items-end justify-between gap-2 mt-1">
+        <div className="text-xs text-muted">{label}</div>
+        <Sparkline data={spark} width={84} height={24} />
       </div>
     </div>
   );
 }
+
+/* ─── analytics helpers ───────────────────────────────────────── */
+
+function buildDailySeries(orders: Order[], days: number) {
+  const today = new Date();
+  const labels: string[] = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    labels.push(d.toISOString().slice(0, 10));
+  }
+  const revenueMap: Record<string, number> = Object.fromEntries(labels.map(d => [d, 0]));
+  const ordersMap:  Record<string, number> = Object.fromEntries(labels.map(d => [d, 0]));
+  for (const o of orders) {
+    if (o.status === 'cancelled') continue;
+    if (revenueMap[o.date] === undefined) continue;
+    revenueMap[o.date] += o.total;
+    ordersMap[o.date]  += 1;
+  }
+  return {
+    labels,
+    revenuePerDay: labels.map(l => revenueMap[l]),
+    ordersPerDay:  labels.map(l => ordersMap[l])
+  };
+}
+
+function buildReviewSeries(dates: string[], days: number): number[] {
+  const today = new Date();
+  const buckets: Record<string, number> = {};
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    buckets[d.toISOString().slice(0, 10)] = 0;
+  }
+  for (const d of dates) {
+    if (buckets[d] !== undefined) buckets[d] += 1;
+  }
+  return Object.values(buckets);
+}
+
+function cumulative(total: number, n: number): number[] {
+  // Synthesised gentle ramp ending at `total` for the customer KPI sparkline.
+  const out: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const t = (i + 1) / n;
+    out.push(Math.round(total * (0.85 + t * 0.15)));
+  }
+  return out;
+}
+

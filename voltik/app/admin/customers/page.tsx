@@ -1,5 +1,7 @@
 import { db } from '@/lib/db';
 import { Icon } from '@/components/Icons';
+import { Avatar } from '@/components/Avatar';
+import { AdminPageHeader } from '@/components/AdminPageHeader';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,10 +20,11 @@ export default async function AdminCustomersPage() {
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="font-display font-bold text-3xl sm:text-4xl">Customers</h1>
-        <p className="text-muted text-sm mt-1">Your community of {customers.length} Voltik customers.</p>
-      </header>
+      <AdminPageHeader
+        title="Customers"
+        subtitle={`Your community of ${customers.length} Voltik customers.`}
+        crumbs={[{ label: 'Customers' }]}
+      />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Stat icon="users"     label="Total customers" value={String(customers.length)} />
@@ -49,9 +52,7 @@ export default async function AdminCustomersPage() {
                 <tr key={c.id} className="border-t border-line/60 hover:bg-elev/40">
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-3">
-                      <div className="h-9 w-9 rounded-full grid place-items-center text-white font-bold text-sm shrink-0" style={{ background: 'linear-gradient(135deg,rgb(var(--brand)),rgb(var(--brand2)))' }}>
-                        {c.name[0]}
-                      </div>
+                      <Avatar name={c.name} seed={c.email} size={36} />
                       <div>
                         <div className="font-semibold">{c.name}</div>
                         <div className="text-xs text-muted font-mono">{c.id}</div>

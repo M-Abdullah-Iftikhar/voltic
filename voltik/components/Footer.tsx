@@ -1,10 +1,14 @@
 import Link from 'next/link';
 import { Icon } from './Icons';
 import { NewsletterForm } from './NewsletterForm';
+import { TrustSeals } from './TrustSeals';
+import { FooterMarquee } from './FooterMarquee';
 
 export function Footer() {
   return (
     <footer className="mt-24 border-t border-line bg-surface">
+      <FooterMarquee />
+      <TrustSeals />
       <div className="container-x py-16 grid lg:grid-cols-[1.5fr_1fr_1fr_1fr_1fr] gap-10">
         <div>
           <Link href="/" className="flex items-center gap-2 font-display font-bold text-lg">
@@ -30,24 +34,23 @@ export function Footer() {
 
         <FooterCol title="Shop" links={[
           { label: 'All Products', href: '/shop' },
+          { label: 'Discover ⚡', href: '/discover' },
           { label: 'Charging',  href: '/shop?category=charging' },
           { label: 'Audio',     href: '/shop?category=audio' },
-          { label: 'Cases',     href: '/shop?category=cases' },
-          { label: 'Photography', href: '/shop?category=camera' }
+          { label: 'Cases',     href: '/shop?category=cases' }
         ]}/>
 
         <FooterCol title="Company" links={[
-          { label: 'About Us', href: '#' },
-          { label: 'Press', href: '#' },
-          { label: 'Careers', href: '#' },
-          { label: 'Sustainability', href: '#' }
+          { label: 'About Us', href: '/about' },
+          { label: 'Contact',  href: '/contact' },
+          { label: 'FAQ',      href: '/faq' }
         ]}/>
 
         <FooterCol title="Help" links={[
-          { label: 'Shipping', href: '#' },
-          { label: 'Returns', href: '#' },
-          { label: 'Warranty', href: '#' },
-          { label: 'Contact', href: '#' }
+          { label: 'Shipping', href: '/shipping' },
+          { label: 'Returns',  href: '/returns' },
+          { label: 'Warranty', href: '/warranty' },
+          { label: 'Contact',  href: '/contact' }
         ]}/>
 
         <div>
@@ -60,9 +63,9 @@ export function Footer() {
       <div className="container-x border-t border-line py-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-muted">
         <span>© 2026 Voltik Technologies. All rights reserved.</span>
         <span className="flex items-center gap-4">
-          <a href="#">Privacy</a>
-          <a href="#">Terms</a>
-          <a href="#">Cookies</a>
+          <Link href="/privacy" className="hover:text-ink transition">Privacy</Link>
+          <Link href="/terms" className="hover:text-ink transition">Terms</Link>
+          <Link href="/cookies" className="hover:text-ink transition">Cookies</Link>
         </span>
       </div>
     </footer>

@@ -5,17 +5,101 @@ import { ProductCard } from '@/components/ProductCard';
 import { ProductIllustration } from '@/components/ProductIllustration';
 import { Icon, type IconKey } from '@/components/Icons';
 import { NewsletterForm } from '@/components/NewsletterForm';
+import { HeroCarousel } from '@/components/HeroCarousel';
+import { TrendingWidget } from '@/components/TrendingWidget';
+import { PurchaseTicker } from '@/components/PurchaseTicker';
+import { MorphingHeadline } from '@/components/MorphingHeadline';
+import { CountUp } from '@/components/CountUp';
+import { EditorialStory } from '@/components/EditorialStory';
+import { LiveCounter } from '@/components/LiveCounter';
+import { LiveShoppersTicker } from '@/components/LiveShoppersTicker';
+import { ChargingKitBuilder } from '@/components/ChargingKitBuilder';
+import { CustomerStorySpotlight } from '@/components/CustomerStorySpotlight';
+import { FlashSaleCountdown } from '@/components/FlashSaleCountdown';
+import { ComparisonCards } from '@/components/ComparisonCards';
+import { PressLogos } from '@/components/PressLogos';
+import { WhyWeLoveIt } from '@/components/WhyWeLoveIt';
+import { BrandPattern } from '@/components/BrandPattern';
+import { TimeOfDayHue } from '@/components/TimeOfDayHue';
+import { AnimatedCategoryShowcase } from '@/components/AnimatedCategoryShowcase';
+import { BentoHotGrid } from '@/components/BentoHotGrid';
+import { DealStrip } from '@/components/DealStrip';
+import { TiltCard } from '@/components/TiltCard';
+import { ScrollHueShifter } from '@/components/ScrollHueShifter';
+import { SpotlightCursor } from '@/components/SpotlightCursor';
+import { PhoneMockup } from '@/components/PhoneMockup';
+import { HeroParticles } from '@/components/HeroParticles';
+import { HeroShowcaseVideo } from '@/components/HeroShowcaseVideo';
+import { CoverflowStrip } from '@/components/CoverflowStrip';
+import { MysteryDealCard } from '@/components/MysteryDealCard';
+import { CategoryMosaic } from '@/components/CategoryMosaic';
+import { CustomerPhotoWall } from '@/components/CustomerPhotoWall';
+import { PromoSlot } from '@/components/PromoSlot';
+import { SnapScrollIndicator } from '@/components/SnapScrollIndicator';
 import { db } from '@/lib/db';
+import { getCachedProducts, getCachedCategories } from '@/lib/cache';
 import { enrich } from '@/lib/reviews';
 import type { EnrichedProduct } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
+// Right-rail snap-scroll markers. IDs match the wrapping divs in the JSX.
+const LANDING_SECTIONS = [
+  { id: 'snap-hero',         label: 'Hero' },
+  { id: 'snap-shop',         label: 'Shop' },
+  { id: 'snap-deals',        label: 'Deals' },
+  { id: 'snap-trending',     label: 'Trending' },
+  { id: 'snap-story',        label: 'Story' },
+  { id: 'snap-testimonials', label: 'Reviews' },
+  { id: 'snap-newsletter',   label: 'Join' }
+];
+
 export default async function HomePage() {
-  const [rawProducts, categories] = await Promise.all([db.listProducts(), db.listCategories()]);
+  const [rawProducts, categories, rawOrders, activeAds] = await Promise.all([
+    getCachedProducts(),
+    getCachedCategories(),
+    db.listOrders(),
+    db.listActiveAds()
+  ]);
   const products = await enrich(rawProducts);
   const rootCategories = categories.filter(c => c.parent === null);
-  // Trending = either a marketing badge OR a strong real rating (≥4.5 with ≥3 reviews)
+
+  // Pre-compute the top product per root category (review-weighted, with a
+  // price fallback for empty categories) so the animated showcase has
+  // something to crossfade into.
+  const showcaseTiles = rootCategories.map(c => {
+    const inCat = products.filter(p =>
+      p.category === c.id || categories.find(x => x.id === p.category)?.parent === c.id);
+    const top = inCat
+      .slice()
+      .sort((a, b) => (b.reviewsCount * b.rating) - (a.reviewsCount * a.rating) || b.price - a.price)[0];
+    return {
+      id: c.id,
+      name: c.name,
+      icon: c.icon,
+      blurb: c.blurb,
+      topProduct: top
+        ? { id: top.id, slug: top.slug, name: top.name, icon: top.icon, price: top.price }
+        : undefined
+    };
+  });
+
+  // Polaroid-style mosaic tiles — same root categories with their live count.
+  // Computed from the full subtree so "Audio" sums every audio sub-category.
+  const mosaicTiles = rootCategories.map(c => {
+    const subtreeIds = [c.id, ...categories.filter(x => x.parent === c.id).map(x => x.id)];
+    const count = products.filter(p => subtreeIds.includes(p.category)).length;
+    return { id: c.id, name: c.name, icon: c.icon, blurb: c.blurb, count };
+  });
+
+  // Hero carousel = deals + new + bestsellers (dedup, max 6).
+  const heroFeatured = [
+    ...products.filter(p => p.badge === 'Hot Deal'),
+    ...products.filter(p => p.badge === 'New'),
+    ...products.filter(p => p.badge === 'Bestseller')
+  ].filter((p, i, arr) => arr.findIndex(x => x.id === p.id) === i).slice(0, 6);
+  const heroSlides = heroFeatured.length >= 3 ? heroFeatured : products.slice(0, 6);
+
   const trending  = products
     .filter(p => p.badge === 'Bestseller' || (p.rating >= 4.5 && p.reviewsCount >= 3))
     .sort((a, b) => b.reviewsCount - a.reviewsCount)
@@ -23,19 +107,78 @@ export default async function HomePage() {
   const deals     = products.filter(p => p.oldPrice).slice(0, 4);
   const newest    = products.filter(p => p.badge === 'New').slice(0, 4);
 
+  // Anonymised recent orders for the ticker (SSR initial data).
+  const tickerItems = rawOrders
+    .filter(o => o.status !== 'cancelled')
+    .slice(0, 12)
+    .map(o => {
+      const firstName = (o.customer || 'Someone').split(/\s+/)[0];
+      const featureProductId = o.lines?.[0]?.id;
+      const product = featureProductId ? products.find(p => p.id === featureProductId) : undefined;
+      return {
+        id: o.id,
+        firstName,
+        country: o.shipping?.country || '',
+        productName: product?.name || `${o.items} item${o.items === 1 ? '' : 's'}`,
+        productId: product?.id,
+        date: o.date
+      };
+    });
+
   return (
     <>
       <Navbar />
-      <main>
-        <Hero />
+      <TimeOfDayHue />
+      <ScrollHueShifter />
+      <main id="main">
+        <SnapScrollIndicator sections={LANDING_SECTIONS} />
+        <div id="snap-hero">
+          <Hero heroSlides={heroSlides} trending={trending} tickerItems={tickerItems} />
+        </div>
         <MarqueeStrip />
-        <Categories categories={rootCategories} />
-        <FeaturedDeal deals={deals} />
-        <Trending products={trending} />
+        {/* Admin-driven promo slot — rotator + banner ads created from
+            /admin/ads land here. Renders nothing when the queue is
+            empty, so the landing stays clean by default. */}
+        <PromoSlot
+          ads={activeAds.filter(a => a.placement === 'banner' || a.placement === 'rotator')}
+          productsById={Object.fromEntries(rawProducts.map(p => [p.id, p]))}
+        />
+        <CoverflowStrip
+          products={trending.length >= 5 ? trending : products.slice(0, 8)}
+          title="Editor's picks, on rotation"
+          kicker="In rotation"
+        />
+        <PressLogos />
+        <div id="snap-shop">
+          <Categories tiles={showcaseTiles} />
+        </div>
+        <div id="snap-deals">
+          <FeaturedDeal deals={deals} />
+          <DealStrip products={deals.length >= 4 ? deals : products.filter(p => p.oldPrice).slice(0, 8)} />
+          <MysteryDealCard candidates={products.filter(p => p.oldPrice && p.stock > 0)} />
+        </div>
+        <BentoHotGrid products={trending.length >= 7 ? trending : products.slice(0, 10)} />
+        <BrandPattern />
+        <div id="snap-trending">
+          <Trending products={trending} />
+        </div>
+        <ChargingKitBuilder catalog={products} />
         <ValueProps />
+        <div id="snap-story">
+          <EditorialStory />
+          <ComparisonCards />
+        </div>
+        <CategoryMosaic tiles={mosaicTiles} />
+        <CustomerPhotoWall products={products} />
+        <CustomerStorySpotlight />
+        <BrandPattern />
         <NewArrivals products={newest} />
-        <Testimonials />
-        <NewsletterCTA />
+        <div id="snap-testimonials">
+          <Testimonials />
+        </div>
+        <div id="snap-newsletter">
+          <NewsletterCTA />
+        </div>
       </main>
       <Footer />
     </>
@@ -43,14 +186,24 @@ export default async function HomePage() {
 }
 
 /* ---------- Hero ---------- */
-function Hero() {
+function Hero({
+  heroSlides, trending, tickerItems
+}: {
+  heroSlides: EnrichedProduct[];
+  trending: EnrichedProduct[];
+  tickerItems: React.ComponentProps<typeof PurchaseTicker>['initial'];
+}) {
   return (
     <section className="relative overflow-hidden">
-      <div className="absolute inset-0 bg-mesh pointer-events-none" />
+      {/* Programmatic 15s product showcase loop behind the hero copy.
+          Replaces with a real `<video>` once footage ships. */}
+      <HeroShowcaseVideo />
+      <div className="absolute inset-0 bg-mesh hero-tod pointer-events-none opacity-60" />
       <div className="absolute inset-0 noise pointer-events-none" />
+      <HeroParticles />
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-brand to-transparent opacity-40" />
 
-      <div className="container-x relative grid lg:grid-cols-[1.1fr_1fr] gap-10 items-center pt-14 pb-20 lg:pt-24 lg:pb-32">
+      <div className="container-x relative grid lg:grid-cols-[1.05fr_1fr] gap-10 items-center pt-12 pb-16 lg:pt-20 lg:pb-24">
         <div className="animate-slidein">
           <span className="chip glass">
             <span className="relative grid place-items-center h-2 w-2">
@@ -60,9 +213,8 @@ function Hero() {
             New drop — Volt Buds Pro 2 now live
           </span>
 
-          <h1 className="font-display font-bold text-5xl sm:text-6xl lg:text-7xl leading-[1.05] mt-5 text-balance">
-            Power up your <span className="gradient-text">mobile life.</span>
-          </h1>
+          <MorphingHeadline />
+
           <p className="text-muted text-lg mt-5 max-w-xl leading-relaxed">
             Engineered accessories for the way you charge, listen, capture and create.
             Free worldwide shipping over $50 · 30-day returns · 2-year warranty.
@@ -78,44 +230,65 @@ function Hero() {
             </Link>
           </div>
 
-          <dl className="mt-12 grid grid-cols-3 max-w-md gap-6">
-            {[
-              { k: '500K+', v: 'Happy customers' },
-              { k: '4.9★',  v: 'Avg. rating' },
-              { k: '120',   v: 'Countries shipped' }
-            ].map(s => (
-              <div key={s.v}>
-                <dt className="font-display font-bold text-3xl gradient-text">{s.k}</dt>
-                <dd className="text-xs text-muted mt-1">{s.v}</dd>
-              </div>
-            ))}
+          <dl className="mt-10 grid grid-cols-3 max-w-md gap-6">
+            <div>
+              <dt className="font-display font-bold text-3xl gradient-text">
+                <CountUp to={500} suffix="K+" />
+              </dt>
+              <dd className="text-xs text-muted mt-1">Happy customers</dd>
+            </div>
+            <div>
+              <dt className="font-display font-bold text-3xl gradient-text">
+                <CountUp to={4.9} decimals={1} suffix="★" />
+              </dt>
+              <dd className="text-xs text-muted mt-1">Avg. rating</dd>
+            </div>
+            <div>
+              <dt className="font-display font-bold text-3xl gradient-text">
+                <CountUp to={120} />
+              </dt>
+              <dd className="text-xs text-muted mt-1">Countries shipped</dd>
+            </div>
           </dl>
+
+          {/* Live "just purchased" ticker + activity counter + shoppers (desktop / tablet) */}
+          <div className="mt-8 hidden sm:flex items-center gap-3 flex-wrap">
+            <PurchaseTicker initial={tickerItems} />
+            <LiveCounter />
+            <LiveShoppersTicker />
+          </div>
         </div>
 
-        {/* Hero visual: floating product collage */}
-        <div className="relative h-[420px] sm:h-[520px] lg:h-[600px] animate-slidein" style={{ animationDelay: '120ms' }}>
-          <div className="absolute inset-0 rounded-[40px] ring-glow" />
-          <FloatCard className="left-4 top-10 w-44 sm:w-56 rotate-[-6deg] animate-floaty" delay={0} category="audio" icon="earbud" title="Volt Buds Pro 2" sub="ANC · 32hr" />
-          <FloatCard className="right-2 top-2 w-44 sm:w-56 rotate-[5deg] animate-floaty" delay={1.5} category="charging" icon="wireless" title="StackPad 3-in-1" sub="MagSafe · 15W" />
-          <FloatCard className="left-12 bottom-2 w-44 sm:w-60 rotate-[3deg] animate-floaty" delay={0.8} category="charging" icon="battery" title="PowerCore 20K" sub="30W PD · Slim" />
-          <FloatCard className="right-6 bottom-14 w-44 sm:w-56 rotate-[-8deg] animate-floaty" delay={2.2} category="cases" icon="case" title="AeroMag Case" sub="MagSafe · 32g" />
+        {/* Hero visual: rotating product ad carousel + floating trending widget */}
+        <div className="relative animate-slidein" style={{ animationDelay: '120ms' }}>
+          <SpotlightCursor>
+            <HeroCarousel products={heroSlides} />
+          </SpotlightCursor>
 
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-56 sm:w-72 h-56 sm:h-72 rounded-full bg-brand/30 blur-3xl" />
+          {/* Floating trending mini-card overlay (hidden on small screens) */}
+          <div className="hidden md:block absolute -bottom-6 -left-6 z-10">
+            <TiltCard maxTilt={10}>
+              <TrendingWidget products={trending} />
+            </TiltCard>
+          </div>
+
+          {/* Tilted phone mockup — appears on roomy viewports only, sits
+              behind the carousel as a "what shopping looks like" cue. */}
+          <div className="hidden xl:block absolute -right-10 -bottom-12 z-0 pointer-events-none w-[220px]" aria-hidden>
+            <div className="pointer-events-auto">
+              <PhoneMockup products={heroSlides} />
+            </div>
+          </div>
+
+          <div className="absolute -inset-2 rounded-[40px] -z-10 bg-brand/20 blur-3xl pointer-events-none" />
         </div>
+      </div>
+
+      {/* Mobile ticker beneath the carousel */}
+      <div className="container-x sm:hidden -mt-2 pb-6">
+        <PurchaseTicker initial={tickerItems} />
       </div>
     </section>
-  );
-}
-
-function FloatCard({ className = '', delay = 0, category, icon, title, sub }: { className?: string; delay?: number; category: string; icon: string; title: string; sub: string }) {
-  return (
-    <div className={`absolute glass rounded-3xl p-3 shadow-card ${className}`} style={{ animationDelay: `${delay}s` }}>
-      <ProductIllustration category={category} icon={icon} className="aspect-square rounded-2xl" size={56} />
-      <div className="mt-3 px-1">
-        <div className="text-sm font-semibold text-ink line-clamp-1">{title}</div>
-        <div className="text-[11px] text-muted">{sub}</div>
-      </div>
-    </div>
   );
 }
 
@@ -136,27 +309,11 @@ function MarqueeStrip() {
 }
 
 /* ---------- Categories ---------- */
-function Categories({ categories }: { categories: { id: string; name: string; icon: string; blurb: string }[] }) {
+function Categories({ tiles }: { tiles: React.ComponentProps<typeof AnimatedCategoryShowcase>['tiles'] }) {
   return (
     <section className="container-x py-20">
       <SectionHead eyebrow="Shop by category" title="Everything your phone needs" subtitle="Eight curated collections covering every accessory your phone could ask for." />
-      <div className="mt-12 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-        {categories.map((c) => {
-          const Glyph = Icon[c.icon as IconKey] || Icon.box;
-          return (
-            <Link key={c.id} href={`/shop?category=${c.id}`} className="group card card-hover p-5 relative overflow-hidden">
-              <ProductIllustration category={c.id} icon={c.icon} className="aspect-[5/3] rounded-xl" size={72} />
-              <div className="mt-4">
-                <h3 className="font-semibold text-ink flex items-center gap-2">
-                  {c.name}
-                  <Icon.arrow width={14} height={14} className="opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition text-brand" />
-                </h3>
-                <p className="text-xs text-muted mt-1 line-clamp-1">{c.blurb}</p>
-              </div>
-            </Link>
-          );
-        })}
-      </div>
+      <AnimatedCategoryShowcase tiles={tiles} />
     </section>
   );
 }
@@ -168,7 +325,7 @@ function FeaturedDeal({ deals }: { deals: EnrichedProduct[] }) {
   const discount = lead.oldPrice ? Math.round(((lead.oldPrice - lead.price) / lead.oldPrice) * 100) : 0;
   return (
     <section className="container-x">
-      <Link href={`/product/${lead.id}`} className="block relative overflow-hidden rounded-3xl border border-line group">
+      <Link href={`/product/${lead.slug || lead.id}`} className="block relative overflow-hidden rounded-3xl border border-line group">
         <div className="absolute inset-0 bg-mesh opacity-80" />
         <div className="relative grid lg:grid-cols-2 gap-6 p-8 sm:p-12">
           <div className="self-center">
@@ -183,6 +340,7 @@ function FeaturedDeal({ deals }: { deals: EnrichedProduct[] }) {
               <span className="btn-primary">View deal <Icon.arrow width={16} height={16} /></span>
               <CountdownPill />
             </div>
+            <WhyWeLoveIt product={lead} forceShow size="sm" />
           </div>
           <div className="relative h-72 lg:h-auto">
             <ProductIllustration category={lead.category} icon={lead.icon} size={220} className="absolute inset-4 group-hover:scale-105 transition-transform duration-500" />
@@ -194,12 +352,8 @@ function FeaturedDeal({ deals }: { deals: EnrichedProduct[] }) {
 }
 
 function CountdownPill() {
-  return (
-    <div className="flex items-center gap-1.5 text-xs text-muted">
-      <Icon.refresh width={14} height={14} />
-      Ends in <span className="font-mono font-semibold text-ink">02:14:47</span>
-    </div>
-  );
+  // Real countdown to midnight UTC — replaces the previous fake timer.
+  return <FlashSaleCountdown label="Ends in" tone="light" />;
 }
 
 /* ---------- Trending ---------- */
@@ -291,12 +445,36 @@ function Testimonials() {
 function NewsletterCTA() {
   return (
     <section className="container-x pb-10">
-      <div className="relative overflow-hidden rounded-3xl border border-line p-10 sm:p-14 text-center">
-        <div className="absolute inset-0 bg-mesh opacity-80" />
-        <div className="relative">
-          <h3 className="font-display font-bold text-3xl sm:text-5xl text-balance">Get 10% off your first order.</h3>
-          <p className="text-muted mt-3 max-w-xl mx-auto">Join the Voltik newsletter for product drops, behind-the-scenes engineering, and member-only deals.</p>
-          <NewsletterForm />
+      {/* Gradient halo — sits behind the card so the section reads as glowing */}
+      <div className="relative">
+        <div
+          aria-hidden
+          className="absolute -inset-px rounded-[28px] pointer-events-none opacity-90"
+          style={{
+            background: 'linear-gradient(135deg, rgb(var(--brand)), rgb(var(--brand2)) 45%, rgb(var(--accent2)))',
+            filter: 'blur(14px)'
+          }}
+        />
+        <div className="relative overflow-hidden rounded-3xl border border-line bg-surface p-10 sm:p-14 text-center">
+          <div className="absolute inset-0 bg-mesh opacity-80" />
+          <div className="relative">
+            <span
+              className="inline-flex items-center gap-1.5 chip mb-5 text-white font-bold"
+              style={{ background: 'linear-gradient(135deg,rgb(var(--accent2)),rgb(var(--brand)))' }}
+            >
+              <Icon.spark width={11} height={11} />
+              10% off your first order
+            </span>
+            <h3 className="font-display font-bold text-3xl sm:text-5xl text-balance">Get on the list.</h3>
+            <p className="text-muted mt-3 max-w-xl mx-auto">Join the Voltik newsletter for product drops, behind-the-scenes engineering, and member-only deals.</p>
+            <NewsletterForm />
+            <p className="mt-3 text-[11px] text-muted">
+              No spam. Unsubscribe in one tap. ·{' '}
+              <Link href="/spin" className="text-brand hover:underline font-semibold">
+                Or spin the wheel for an instant code ⚡
+              </Link>
+            </p>
+          </div>
         </div>
       </div>
     </section>

@@ -2,13 +2,18 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Icon, type IconKey } from './Icons';
+import { AdminRecentEdits } from './AdminRecentEdits';
 
 const NAV: { href: string; label: string; icon: IconKey }[] = [
   { href: '/admin',            label: 'Dashboard',  icon: 'dashboard' },
   { href: '/admin/products',   label: 'Products',   icon: 'box' },
   { href: '/admin/orders',     label: 'Orders',     icon: 'list' },
   { href: '/admin/customers',  label: 'Customers',  icon: 'users' },
-  { href: '/admin/categories', label: 'Categories', icon: 'tag' }
+  { href: '/admin/categories', label: 'Categories', icon: 'tag' },
+  { href: '/admin/reviews',    label: 'Reviews',    icon: 'star' },
+  { href: '/admin/promos',     label: 'Promos',     icon: 'spark' },
+  { href: '/admin/ads',        label: 'Ads',        icon: 'trending' },
+  { href: '/admin/subscribers', label: 'Subscribers', icon: 'heart' }
 ];
 
 export function AdminSidebar() {
@@ -48,6 +53,8 @@ export function AdminSidebar() {
           );
         })}
       </nav>
+
+      <AdminRecentEdits />
 
       <div className="p-3 border-t border-line space-y-1">
         <Link href="/" className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-muted hover:text-ink hover:bg-elev">

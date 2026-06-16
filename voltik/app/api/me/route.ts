@@ -5,11 +5,14 @@ import { currentUser, hashPassword, publicUser, validateEmail, verifyPassword } 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-/** GET /api/me — current user's profile incl. cart + favorites. */
+/** GET /api/me — current user's profile incl. cart + favorites.
+ *  Also lazy-prunes any cart lines / favorites whose product was deleted. */
 export async function GET() {
   const u = await currentUser();
   if (!u) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  return NextResponse.json({ user: publicUser(u) });
+  // Best effort — if prune fails we still return the original user.
+  const cleaned = await db.pruneUserRefs(u.id).catch(() => u);
+  return NextResponse.json({ user: publicUser(cleaned || u) });
 }
 
 /** PATCH /api/me — update name / email / password. */

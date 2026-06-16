@@ -1,19 +1,24 @@
 'use client';
-import { useMemo, useState, useEffect } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { ProductCard } from '@/components/ProductCard';
+import { ProductListRow } from '@/components/ProductListRow';
 import { Icon } from '@/components/Icons';
+import { EmptyState } from '@/components/EmptyState';
+import { RecentlyViewed } from '@/components/RecentlyViewed';
+import { FlipGrid } from '@/components/FlipGrid';
+import { FilterAwareBlurb } from '@/components/FilterAwareBlurb';
 import { buildTree, descendantIds, categoryPath } from '@/lib/categoryTree';
 import type { EnrichedProduct, Category, CategoryNode } from '@/lib/types';
 
 type Sort = 'featured' | 'price-asc' | 'price-desc' | 'rating' | 'newest';
 
-const SORTS: { key: Sort; label: string }[] = [
-  { key: 'featured',   label: 'Featured' },
-  { key: 'price-asc',  label: 'Price: Low → High' },
-  { key: 'price-desc', label: 'Price: High → Low' },
-  { key: 'rating',     label: 'Top rated' },
-  { key: 'newest',     label: 'Newest' }
+const SORTS: { key: Sort; label: string; icon: 'spark' | 'arrow' | 'star' | 'refresh' }[] = [
+  { key: 'featured',   label: 'Featured',           icon: 'spark' },
+  { key: 'price-asc',  label: 'Price: Low → High',  icon: 'arrow' },
+  { key: 'price-desc', label: 'Price: High → Low',  icon: 'arrow' },
+  { key: 'rating',     label: 'Top rated',          icon: 'star' },
+  { key: 'newest',     label: 'Newest',             icon: 'refresh' }
 ];
 
 export function ShopClient({ products, categories }: { products: EnrichedProduct[]; categories: Category[] }) {
@@ -25,6 +30,7 @@ export function ShopClient({ products, categories }: { products: EnrichedProduct
   const [sort, setSort]                     = useState<Sort>((sp.get('sort') as Sort) || 'featured');
   const [maxPrice, setMaxPrice]             = useState<number>(200);
   const [minRating, setMinRating]           = useState<number>(0);
+  const [view, setView]                     = useState<'grid' | 'list'>('grid');
 
   const tree = useMemo(() => buildTree(categories), [categories]);
 
@@ -166,33 +172,112 @@ export function ShopClient({ products, categories }: { products: EnrichedProduct
           </nav>
         )}
 
+        {/* Active filter chips */}
+        <ActiveFilterChips
+          activeCategory={activeCategory}
+          categoryName={breadcrumb[breadcrumb.length - 1]?.name}
+          query={query}
+          maxPrice={maxPrice}
+          minRating={minRating}
+          sort={sort}
+          onClearCategory={() => setActiveCategory('all')}
+          onClearQuery={() => setQuery('')}
+          onClearPrice={() => setMaxPrice(200)}
+          onClearRating={() => setMinRating(0)}
+          onClearSort={() => setSort('featured')}
+          onClearAll={() => {
+            setActiveCategory('all'); setQuery(''); setMaxPrice(200); setMinRating(0); setSort('featured');
+          }}
+        />
+
+        {/* Filter-aware blurb — a one-liner that reads the current filter
+            set and writes a short editorial line above the grid. Pure
+            heuristic, no LLM — see `FilterAwareBlurb` for the rule set. */}
+        <FilterAwareBlurb
+          category={activeCategory}
+          categoryName={breadcrumb[breadcrumb.length - 1]?.name}
+          query={query}
+          sort={sort}
+          resultCount={filtered.length}
+          maxPrice={maxPrice}
+        />
+
         <div className="flex items-center justify-between mb-5 gap-3 flex-wrap">
           <div className="text-sm text-muted">
             Showing <span className="text-ink font-semibold">{filtered.length}</span> of {products.length} products
           </div>
           <div className="flex items-center gap-2">
+            {/* Grid / list toggle */}
+            <div className="inline-flex items-center rounded-full border border-line bg-surface p-0.5">
+              <button
+                onClick={() => setView('grid')}
+                aria-pressed={view === 'grid'}
+                aria-label="Grid view"
+                className={`grid place-items-center h-7 w-7 rounded-full transition ${view === 'grid' ? 'bg-brand text-white' : 'text-muted hover:text-ink'}`}
+              >
+                <Icon.dashboard width={13} height={13} />
+              </button>
+              <button
+                onClick={() => setView('list')}
+                aria-pressed={view === 'list'}
+                aria-label="List view"
+                className={`grid place-items-center h-7 w-7 rounded-full transition ${view === 'list' ? 'bg-brand text-white' : 'text-muted hover:text-ink'}`}
+              >
+                <Icon.list width={13} height={13} />
+              </button>
+            </div>
+
             <span className="text-xs text-muted">Sort</span>
-            <select
-              value={sort}
-              onChange={(e) => setSort(e.target.value as Sort)}
-              className="rounded-full border border-line bg-surface px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand/50"
-            >
-              {SORTS.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
-            </select>
+            <SortPicker value={sort} onChange={setSort} />
           </div>
         </div>
 
         {filtered.length === 0 ? (
-          <div className="card p-10 text-center">
-            <Icon.search width={32} height={32} className="mx-auto text-muted" />
-            <h3 className="font-display font-bold text-xl mt-3">No matches</h3>
-            <p className="text-sm text-muted mt-1">Try a different category, search term, or price range.</p>
-          </div>
+          <EmptyState
+            kind="search"
+            title="No products match"
+            body="Try removing a filter or searching a different term."
+            primary={{ href: '/shop', label: 'Reset filters' }}
+          />
+        ) : view === 'grid' ? (
+          <FlipGrid
+            signature={`grid:${activeCategory}:${query}:${sort}:${maxPrice}:${minRating}:${filtered.map(p => p.id).join(',')}`}
+            className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
+          >
+            {filtered.map(p => (
+              <div key={p.id} data-flip-id={p.id}>
+                <ProductCard product={p} />
+              </div>
+            ))}
+          </FlipGrid>
         ) : (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {filtered.map(p => <ProductCard key={p.id} product={p} />)}
+          <FlipGrid
+            signature={`list:${activeCategory}:${query}:${sort}:${maxPrice}:${minRating}:${filtered.map(p => p.id).join(',')}`}
+            className="space-y-3"
+          >
+            {filtered.map(p => (
+              <div key={p.id} data-flip-id={p.id}>
+                <ProductListRow product={p} />
+              </div>
+            ))}
+          </FlipGrid>
+        )}
+
+        {/* End-of-grid graphic + recently-viewed strip */}
+        {filtered.length > 0 && filtered.length === products.length && (
+          <div className="mt-12 text-center text-xs text-muted">
+            <Icon.check width={16} height={16} className="text-success mx-auto mb-1.5" />
+            You've seen all {products.length} products in the catalog
           </div>
         )}
+        {filtered.length > 0 && filtered.length < products.length && (
+          <div className="mt-10 text-center text-xs text-muted">
+            <Icon.spark width={14} height={14} className="mx-auto mb-1 text-brand" />
+            That's everything matching your filters · adjust filters to see more
+          </div>
+        )}
+
+        <RecentlyViewed catalog={products} title="Recently viewed by you" />
       </section>
     </div>
   );
@@ -227,6 +312,112 @@ function CategoryBranch({ node, active, onSelect, counts, expanded, onToggle }: 
         </ul>
       )}
     </li>
+  );
+}
+
+/* ─── Sort picker with visual icons ─────────────────────────────────── */
+
+function SortPicker({ value, onChange }: { value: Sort; onChange: (s: Sort) => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const current = SORTS.find(s => s.key === value) || SORTS[0];
+
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className="flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1.5 text-sm hover:border-brand/40 transition"
+      >
+        <SortIcon kind={current.key} />
+        <span className="text-ink font-medium">{current.label}</span>
+        <Icon.arrow width={11} height={11} className={`text-muted transition-transform ${open ? '-rotate-90' : 'rotate-90'}`} />
+      </button>
+      {open && (
+        <ul
+          role="listbox"
+          aria-label="Sort products"
+          className="absolute z-40 right-0 mt-2 w-56 card p-1 animate-slidein"
+        >
+          {SORTS.map(s => {
+            const active = s.key === value;
+            return (
+              <li key={s.key}>
+                <button
+                  role="option"
+                  aria-selected={active}
+                  onClick={() => { onChange(s.key); setOpen(false); }}
+                  className={`w-full flex items-center gap-2 rounded-xl px-3 py-2 text-sm text-left transition ${active ? 'bg-brand/10 text-brand' : 'text-ink hover:bg-elev'}`}
+                >
+                  <SortIcon kind={s.key} />
+                  <span className="flex-1">{s.label}</span>
+                  {active && <Icon.check width={12} height={12} />}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function SortIcon({ kind }: { kind: Sort }) {
+  // Rotate the arrow to indicate price direction; star/refresh/spark speak for themselves.
+  if (kind === 'price-asc')  return <Icon.arrow width={12} height={12} className="text-brand rotate-90" />;
+  if (kind === 'price-desc') return <Icon.arrow width={12} height={12} className="text-brand -rotate-90" />;
+  if (kind === 'rating')     return <Icon.star    width={12} height={12} className="text-warn" />;
+  if (kind === 'newest')     return <Icon.refresh width={12} height={12} className="text-success" />;
+  return <Icon.spark width={12} height={12} className="text-brand" />;
+}
+
+/* ─── Active filter chips ───────────────────────────────────────────── */
+
+function ActiveFilterChips({
+  activeCategory, categoryName, query, maxPrice, minRating, sort,
+  onClearCategory, onClearQuery, onClearPrice, onClearRating, onClearSort, onClearAll
+}: {
+  activeCategory: string; categoryName?: string; query: string; maxPrice: number;
+  minRating: number; sort: Sort;
+  onClearCategory: () => void; onClearQuery: () => void; onClearPrice: () => void;
+  onClearRating: () => void; onClearSort: () => void; onClearAll: () => void;
+}) {
+  const chips: { key: string; label: string; onClear: () => void }[] = [];
+  if (activeCategory !== 'all') chips.push({ key: 'cat',    label: categoryName || activeCategory, onClear: onClearCategory });
+  if (query)                    chips.push({ key: 'q',      label: `“${query}”`,                   onClear: onClearQuery });
+  if (maxPrice < 200)           chips.push({ key: 'price',  label: `≤ $${maxPrice}`,               onClear: onClearPrice });
+  if (minRating > 0)            chips.push({ key: 'rating', label: `${minRating}+ ★`,              onClear: onClearRating });
+  if (sort !== 'featured')      chips.push({ key: 'sort',   label: `Sort: ${SORTS.find(s => s.key === sort)?.label}`, onClear: onClearSort });
+
+  if (chips.length === 0) return null;
+
+  return (
+    <div className="flex items-center gap-2 flex-wrap mb-4 animate-slidein">
+      <span className="text-xs uppercase tracking-wide text-muted font-semibold">Active filters</span>
+      {chips.map(c => (
+        <button
+          key={c.key}
+          onClick={c.onClear}
+          className="chip bg-brand/10 text-brand hover:bg-brand/20 transition"
+        >
+          {c.label}
+          <Icon.close width={10} height={10} className="ml-1" />
+        </button>
+      ))}
+      <button onClick={onClearAll} className="text-xs text-muted hover:text-danger underline-offset-2 hover:underline">
+        Clear all
+      </button>
+    </div>
   );
 }
 

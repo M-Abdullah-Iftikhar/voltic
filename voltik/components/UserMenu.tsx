@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Icon } from './Icons';
 import { useUser } from './UserContext';
 import { useFavorites } from './FavoritesContext';
+import { Avatar } from './Avatar';
 
 export function UserMenu() {
   const { user, logout } = useUser();
@@ -29,8 +30,6 @@ export function UserMenu() {
     );
   }
 
-  const initials = user.name.split(' ').slice(0, 2).map(s => s[0]).join('').toUpperCase();
-
   const doLogout = async () => {
     await logout();
     setOpen(false);
@@ -44,9 +43,7 @@ export function UserMenu() {
         aria-label="Account"
         className="flex items-center gap-2 rounded-full pl-1 pr-3 py-1 border border-line hover:bg-elev transition"
       >
-        <span className="grid place-items-center h-7 w-7 rounded-full text-white text-xs font-bold" style={{ background: 'linear-gradient(135deg,rgb(var(--brand)),rgb(var(--brand2)))' }}>
-          {initials}
-        </span>
+        <Avatar name={user.name} seed={user.email} size={28} />
         <span className="text-xs font-semibold hidden sm:inline max-w-[80px] truncate">{user.name.split(' ')[0]}</span>
       </button>
 

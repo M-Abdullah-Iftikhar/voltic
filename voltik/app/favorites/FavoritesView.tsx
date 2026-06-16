@@ -1,7 +1,6 @@
 'use client';
-import Link from 'next/link';
 import { ProductCard } from '@/components/ProductCard';
-import { Icon } from '@/components/Icons';
+import { EmptyState } from '@/components/EmptyState';
 import { useFavorites } from '@/components/FavoritesContext';
 import { useUser } from '@/components/UserContext';
 import type { EnrichedProduct } from '@/lib/types';
@@ -13,19 +12,18 @@ export function FavoritesView({ products }: { products: EnrichedProduct[] }) {
 
   if (saved.length === 0) {
     return (
-      <div className="card p-14 text-center">
-        <div className="grid place-items-center h-20 w-20 mx-auto rounded-full bg-elev text-muted">
-          <Icon.heart width={32} height={32} />
-        </div>
-        <h2 className="font-display font-bold text-2xl mt-5">No favourites yet</h2>
-        <p className="text-muted text-sm mt-2 max-w-md mx-auto">
-          Tap the heart on any product to save it here.
-          {!user && <> <Link href="/login" className="text-brand hover:underline">Sign in</Link> to keep favorites across devices.</>}
-        </p>
-        <Link href="/shop" className="btn-primary mt-6 inline-flex">
-          Browse the catalog <Icon.arrow width={14} height={14} />
-        </Link>
-      </div>
+      <EmptyState
+        kind="favorites"
+        title="No favourites yet"
+        body={
+          <>
+            Tap the heart on any product to save it here.
+            {!user && <> Sign in to keep favorites across devices.</>}
+          </>
+        }
+        primary={{ href: '/shop',  label: 'Browse the catalog' }}
+        secondary={!user ? { href: '/login', label: 'Sign in' } : undefined}
+      />
     );
   }
 

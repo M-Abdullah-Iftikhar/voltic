@@ -1,9 +1,15 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { currentUser } from '@/lib/auth';
+import { currentUser, publicUser } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { Icon, type IconKey } from '@/components/Icons';
 import { ProductIllustration } from '@/components/ProductIllustration';
+import { AccountGreeting } from '@/components/AccountGreeting';
+import { Achievements } from '@/components/Achievements';
+import { ReorderFavorites } from '@/components/ReorderFavorites';
+import { ActivityTimeline } from '@/components/ActivityTimeline';
+import { TotalImpactWidget } from '@/components/TotalImpactWidget';
+import { enrich } from '@/lib/reviews';
 import type { OrderStatus } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -20,22 +26,65 @@ export default async function AccountOverview() {
   const user = await currentUser();
   if (!user) redirect('/login?next=/account');
 
-  const [orders, reviews, products] = await Promise.all([
+  const [orders, reviews, rawProducts] = await Promise.all([
     db.listOrdersForUser(user.id, user.email),
     db.listReviewsForUser(user.id),
     db.listProducts()
   ]);
+  const products = await enrich(rawProducts);
 
   const totalSpent = orders.filter(o => o.status !== 'cancelled').reduce((s, o) => s + o.total, 0);
   const itemsBought = orders.filter(o => o.status !== 'cancelled').reduce((s, o) => s + (o.items || 0), 0);
   const lastOrder = orders[0];
 
+  // Impact roll-up — savings from discounted lines on non-cancelled orders,
+  // and helpful-vote signal from the user's reviews.
+  const productById = new Map(products.map(p => [p.id, p]));
+  let savedFromDeals = 0;
+  for (const o of orders) {
+    if (o.status === 'cancelled') continue;
+    for (const line of o.lines || []) {
+      const p = productById.get(line.id);
+      if (p?.oldPrice && p.oldPrice > p.price) {
+        savedFromDeals += (p.oldPrice - p.price) * line.qty;
+      }
+    }
+  }
+  const helpfulVotes = reviews.reduce((s, r) => s + (r.helpfulCount || 0), 0);
+  const reviewedProducts = new Set(reviews.map(r => r.productId)).size;
+
+  const pUser = publicUser(user)!;
+
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="font-display font-bold text-2xl">Welcome back, {user.name.split(' ')[0]}.</h2>
-        <p className="text-muted text-sm mt-1">Here's a quick look at your activity.</p>
-      </div>
+      <AccountGreeting
+        user={pUser}
+        orderCount={orders.length}
+        reviewCount={reviews.length}
+        favoriteCount={user.favorites.length}
+      />
+
+      {/* Wrapped teaser — only when there's actually something to recap */}
+      {orders.length > 0 && (
+        <Link
+          href="/account/wrapped"
+          className="relative block overflow-hidden rounded-3xl p-5 sm:p-6 group"
+          style={{ background: 'linear-gradient(135deg,#0ea5e9 0%, #7c3aed 60%, #f97316 100%)' }}
+        >
+          <div className="absolute inset-0 bg-mesh opacity-30" aria-hidden />
+          <div className="relative flex items-center gap-4 text-white">
+            <span className="grid place-items-center h-12 w-12 rounded-2xl bg-white/20 backdrop-blur-sm shrink-0">
+              <Icon.spark width={22} height={22} />
+            </span>
+            <div className="flex-1 min-w-0">
+              <div className="text-[10px] uppercase tracking-[0.3em] opacity-80">Voltik Wrapped · 12 months</div>
+              <div className="font-display font-bold text-xl mt-1">Your year, plugged in.</div>
+              <p className="text-xs opacity-90 mt-1">A Stories-style recap of everything you bought, saved, and said.</p>
+            </div>
+            <Icon.arrow width={18} height={18} className="opacity-70 group-hover:opacity-100 group-hover:translate-x-1 transition" />
+          </div>
+        </Link>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -74,6 +123,29 @@ export default async function AccountOverview() {
           </ul>
         )}
       </div>
+
+      {/* Your impact — savings + community contribution */}
+      <TotalImpactWidget
+        saved={savedFromDeals}
+        helpfulVotes={helpfulVotes}
+        reviewedProducts={reviewedProducts}
+        memberSince={user.createdAt}
+      />
+
+      {/* Pick up where you left off — favourites quick-add */}
+      <ReorderFavorites catalog={products} />
+
+      {/* Achievements / loyalty badges */}
+      <Achievements
+        orders={orders.length}
+        reviews={reviews.length}
+        favorites={user.favorites.length}
+        spent={totalSpent}
+        since={user.createdAt}
+      />
+
+      {/* Activity timeline */}
+      <ActivityTimeline orders={orders} reviews={reviews} joinedAt={user.createdAt} />
 
       {/* Bought-it widget — products from delivered orders. */}
       {orders.length > 0 && (
@@ -119,7 +191,7 @@ function PurchasedGrid({ orders, products }: { orders: any[]; products: any[] })
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
       {items.map(p => (
-        <Link key={p.id} href={`/product/${p.id}`} className="group block">
+        <Link key={p.id} href={`/product/${p.slug || p.id}`} className="group block">
           <ProductIllustration category={p.category} icon={p.icon} className="aspect-square rounded-xl" size={48} />
           <div className="mt-2 text-xs font-semibold line-clamp-2">{p.name}</div>
           <div className="text-[11px] text-muted">${p.price.toFixed(2)}</div>

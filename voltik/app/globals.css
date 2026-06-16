@@ -2,50 +2,129 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+/* Fonts now loaded via `next/font/google` in app/layout.tsx — Geist for
+   display, Inter for body. CSS variables (--font-sans, --font-display)
+   are wired up on <html>; Tailwind picks them up via the fontFamily map. */
 
 @layer base {
   :root {
-    /* Light theme — clean, premium feel */
-    --bg: 247 248 252;
-    --surface: 255 255 255;
-    --elev: 255 255 255;
+    /* Light theme — cool grey canvas so WHITE cards visibly lift off it.
+       Layering (low → high): bg → elev → surface. */
+    --bg: 237 240 247;               /* soft cool-grey canvas */
+    --surface: 255 255 255;          /* cards — pop above the canvas */
+    --elev: 245 247 251;             /* inner panels / hover states */
     --ink: 14 17 28;
     --muted: 100 109 131;
-    --line: 226 230 240;
-    --brand: 14 165 233;     /* electric cyan */
-    --brand2: 124 58 237;    /* violet */
-    --accent: 244 114 182;   /* pink accent */
+    --line: 213 220 233;             /* visible card borders */
+    --brand: 14 165 233;
+    --brand2: 124 58 237;
+    --accent: 244 114 182;
+    /* Warm tangerine secondary — used for "limited" / "drop" / heat callouts
+       so we don't lean on `--brand` for everything. */
+    --accent2: 251 146 60;
     --success: 16 185 129;
     --danger: 239 68 68;
     --warn: 245 158 11;
+    /* Product-illustration surface — clearly silver against white cards */
+    --illus-from: 232 236 245;
+    --illus-to:   214 220 234;
   }
 
   .dark {
-    /* Dark theme — deep, OLED-friendly */
-    --bg: 10 14 26;
-    --surface: 17 22 39;
-    --elev: 24 30 51;
+    /* Dark theme — deep slate with a slight blue-warmth lift so it
+       doesn't read as pure pitch-black under product photography. */
+    --bg: 13 18 32;                  /* was 10 14 26 — lifted for warmth */
+    --surface: 19 25 43;             /* was 17 22 39 */
+    --elev: 26 33 55;                /* was 24 30 51 */
     --ink: 240 244 255;
     --muted: 148 163 184;
     --line: 36 44 70;
-    --brand: 56 189 248;     /* sky 400 */
-    --brand2: 168 85 247;    /* purple 500 */
+    --brand: 56 189 248;
+    --brand2: 168 85 247;
     --accent: 244 114 182;
+    --accent2: 251 146 60;
     --success: 34 197 94;
     --danger: 248 113 113;
     --warn: 251 191 36;
+    --illus-from: 24 30 51;
+    --illus-to:   32 40 66;
   }
 
   html, body {
     background: rgb(var(--bg));
     color: rgb(var(--ink));
-    font-family: 'Inter', system-ui, sans-serif;
+    font-family: var(--font-sans), 'Inter', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }
 
+  /* A11y: user-controlled font scaler. Defaults to 1; set by the
+     AccessibilityPrefs floater (sm 0.92, md 1, lg 1.12). */
+  html { font-size: calc(16px * var(--font-scale, 1)); }
+
+  /* Body copy is intentionally a touch smaller than the 16px root so the
+     storefront reads more refined — ~10% reduction without touching
+     Tailwind's rem-based text-* utilities (those still override per-
+     element). Long-form prose gets a matching line-height bump so the
+     density doesn't tip into "cramped". */
+  body { font-size: 0.9375rem; line-height: 1.55; }
+  p, li, dd, dt, blockquote, figcaption, summary {
+    font-size: 0.9375rem; line-height: 1.6;
+  }
+
+  /* Snap-scroll landing markers — give every wrapping div with id
+     starting with `snap-` a scroll offset so the sticky navbar doesn't
+     swallow the heading when SnapScrollIndicator jumps to it. */
+  [id^="snap-"] { scroll-margin-top: 80px; }
+
+  /* A11y: high-contrast mode — stronger borders + suppress decorative
+     glows so the UI lands closer to WCAG AAA without losing identity. */
+  html.contrast-high {
+    --line: 60 70 100;
+    --muted: 70 80 100;
+  }
+  html.contrast-high.dark {
+    --line: 130 145 180;
+    --muted: 200 210 230;
+    --ink: 250 252 255;
+  }
+  html.contrast-high .card,
+  html.contrast-high .input,
+  html.contrast-high .btn-ghost,
+  html.contrast-high .chip {
+    border-width: 2px;
+  }
+  html.contrast-high .btn-primary { box-shadow: none; }
+  html.contrast-high .gradient-text {
+    -webkit-background-clip: initial;
+    background-clip: initial;
+    background: transparent;
+    color: rgb(var(--ink));
+  }
+  html.contrast-high .bg-mesh {
+    background: transparent;
+  }
+
+  /* Typographic refinement — tighter tracking on big display heads, looser
+     on small uppercase labels so the brand reads "considered, not noisy". */
+  .font-display { letter-spacing: -0.02em; }
+  h1, .h1, .text-4xl, .text-5xl { letter-spacing: -0.025em; }
+  .uppercase, .tracking-wide, .tracking-widest { letter-spacing: 0.18em; }
+
   ::selection { background: rgb(var(--brand) / 0.3); }
+
+  /* Universal visible focus rings — keyboard users see exactly where
+     they are. Mouse users won't see them (the :focus-visible spec). */
+  :focus { outline: none; }
+  :focus-visible {
+    outline: 2px solid rgb(var(--brand));
+    outline-offset: 2px;
+    border-radius: 8px;
+  }
+  /* Inputs already render their own ring via the .input class */
+  input:focus-visible, textarea:focus-visible, select:focus-visible {
+    outline: none;
+  }
 
   /* Custom scrollbar */
   ::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -69,8 +148,27 @@
   .btn-ghost { @apply btn border border-line text-ink hover:bg-surface; }
   .btn-dark  { @apply btn bg-ink text-bg hover:opacity-90; }
 
+  /* Branded SVG cursor over primary CTAs — a tiny gradient lightning bolt
+     with a hotspot on the tip. Falls back to `pointer` on devices that
+     can't render custom cursors. Skipped under coarse-pointer / touch. */
+  .btn-primary {
+    cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0%25' stop-color='%2338bdf8'/><stop offset='100%25' stop-color='%23a855f7'/></linearGradient></defs><path d='M16 3 L5 16 h6 l-1 9 L23 11 h-7 l1-8z' fill='url(%23g)' stroke='white' stroke-width='1.2' stroke-linejoin='round'/></svg>") 4 4, pointer;
+  }
+  @media (pointer: coarse) {
+    .btn-primary { cursor: pointer; }
+  }
+
   .card {
     @apply bg-surface rounded-2xl border border-line/70 transition-all;
+    /* Subtle lift so white cards read as elevated against the canvas */
+    box-shadow:
+      0 1px 2px rgb(15 23 42 / 0.04),
+      0 4px 12px rgb(15 23 42 / 0.04);
+  }
+  /* Dark theme doesn't need the lift — the lighter surface vs near-black bg
+     already provides plenty of layering, and the shadow would just smudge. */
+  .dark .card {
+    box-shadow: none;
   }
   .card-hover { @apply hover:-translate-y-1 hover:shadow-card; }
 
@@ -98,31 +196,75 @@
 
   .ring-glow { box-shadow: 0 0 0 1px rgb(var(--brand)/.3), 0 0 40px -8px rgb(var(--brand)/.5); }
 
-  /* Reusable product illustration container */
+  /* Admin table rows: hover gets a brand-tinted left-border accent so the
+     eye locks on the active row without losing the rest of the table. */
+  .admin-row {
+    @apply border-t border-line/60 relative transition-colors;
+    border-left: 2px solid transparent;
+  }
+  .admin-row:hover {
+    background: rgb(var(--elev) / 0.55);
+    border-left-color: rgb(var(--brand) / 0.6);
+  }
+  .admin-row.is-open {
+    background: rgb(var(--elev) / 0.6);
+    border-left-color: rgb(var(--brand));
+  }
+
+  /* Typography shell used by static content pages (About, FAQ, Privacy…)
+     We avoid Tailwind's typography plugin so every project bundle stays slim. */
+  .voltik-prose h2 { @apply font-display font-bold text-xl text-ink mt-8 mb-2; }
+  .voltik-prose h3 { @apply font-display font-semibold text-base text-ink mt-6 mb-2; }
+  .voltik-prose p  { @apply text-muted leading-relaxed; }
+  .voltik-prose ul { @apply list-disc pl-5 space-y-1.5 text-muted; }
+  .voltik-prose ol { @apply list-decimal pl-5 space-y-1.5 text-muted; }
+  .voltik-prose a  { @apply text-brand hover:underline; }
+  .voltik-prose strong { @apply text-ink font-semibold; }
+  .voltik-prose .lede { @apply text-base text-ink leading-relaxed; }
+
+  /* ── Unified product illustration ────────────────────────────────
+     Single neutral silver surface across every product card on the
+     site — no per-category color bombs. Adapts to light/dark via
+     tokens; in light mode reads clearly as silver against white cards. */
   .illus {
     position: relative;
     overflow: hidden;
     isolation: isolate;
+    background: linear-gradient(135deg, rgb(var(--illus-from)), rgb(var(--illus-to)));
+    border: 1px solid rgb(var(--line));
+    color: rgb(var(--muted));
+    /* Inset highlight at the top, soft shadow at the bottom — sells the
+       silver-plate feel without leaving the neutral palette. */
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.55),
+      inset 0 -1px 0 rgb(0 0 0 / 0.04);
   }
+  .dark .illus {
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.05),
+      inset 0 -1px 0 rgb(0 0 0 / 0.2);
+  }
+  /* Soft depth — slightly more presence than before */
   .illus::before {
     content: '';
     position: absolute; inset: 0;
     background:
-      radial-gradient(circle at 30% 20%, rgb(255 255 255 / .35), transparent 50%),
-      radial-gradient(circle at 80% 80%, rgb(0 0 0 / .15), transparent 50%);
+      radial-gradient(circle at 28% 22%, rgb(var(--ink) / 0.06), transparent 55%),
+      radial-gradient(circle at 78% 82%, rgb(var(--brand) / 0.05), transparent 60%);
     z-index: 0;
   }
+  /* Restrained sweep — keeps motion without screaming */
   .illus::after {
     content: '';
     position: absolute; inset: -1px;
-    background: linear-gradient(135deg, transparent 40%, rgb(255 255 255 / .2) 50%, transparent 60%);
+    background: linear-gradient(135deg, transparent 42%, rgb(var(--ink) / 0.07) 50%, transparent 58%);
     background-size: 200% 200%;
-    animation: shine 4s linear infinite;
+    animation: shine 7s linear infinite;
     pointer-events: none;
-    mix-blend-mode: overlay;
     z-index: 1;
   }
-  .illus > svg { position: relative; z-index: 2; }
+  .illus > svg { position: relative; z-index: 2; opacity: 0.7; }
+  .dark .illus > svg { opacity: 0.85; }
 
   /* Animated noise overlay for hero */
   .noise {
@@ -143,3 +285,101 @@
 @keyframes shine    { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
 @keyframes slidein  { 0% { opacity: 0; transform: translateY(12px); } 100% { opacity: 1; transform: translateY(0); } }
 @keyframes pulseRing { 0% { transform: scale(.85); opacity: .6; } 100% { transform: scale(1.6); opacity: 0; } }
+@keyframes shimmer  { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+@keyframes wiggle   { 0%,100% { transform: rotate(0); } 25% { transform: rotate(-10deg); } 75% { transform: rotate(10deg); } }
+@keyframes scrollX  { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+@keyframes drawerIn { 0% { transform: translateX(100%); } 100% { transform: translateX(0); } }
+@keyframes barIn    { 0% { transform: translateY(-100%); } 100% { transform: translateY(0); } }
+@keyframes tickerUp { 0% { transform: translateY(100%); opacity: 0; } 12%,88% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(-100%); opacity: 0; } }
+@keyframes slideAway { 0% { transform: translateX(0); opacity: 1; max-height: 200px; } 60% { transform: translateX(-30%); opacity: 0; } 100% { transform: translateX(-100%); opacity: 0; max-height: 0; padding: 0; margin: 0; } }
+@keyframes shake { 0%,100% { transform: translateX(0); } 20% { transform: translateX(-6px); } 40% { transform: translateX(6px); } 60% { transform: translateX(-4px); } 80% { transform: translateX(4px); } }
+@keyframes tickPop { 0% { transform: scale(0); opacity: 0; } 70% { transform: scale(1.15); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+@keyframes fadeIn  { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+/* Multi-stop spring — overshoot up, settle back, with a tiny direction
+   hint via translateY so + and − read differently. */
+@keyframes bumpSpring {
+  0%   { transform: scale(1) translateY(0); }
+  35%  { transform: scale(1.18) translateY(-1px); }
+  60%  { transform: scale(0.94) translateY(0.5px); }
+  80%  { transform: scale(1.04) translateY(0); }
+  100% { transform: scale(1) translateY(0); }
+}
+@keyframes bumpSpringUp {
+  0%   { transform: scale(1) translateY(0); }
+  35%  { transform: scale(1.22) translateY(-2px); }
+  60%  { transform: scale(0.95) translateY(0.5px); }
+  100% { transform: scale(1) translateY(0); }
+}
+@keyframes bumpSpringDown {
+  0%   { transform: scale(1) translateY(0); }
+  35%  { transform: scale(0.82) translateY(2px); }
+  60%  { transform: scale(1.04) translateY(-0.5px); }
+  100% { transform: scale(1) translateY(0); }
+}
+@keyframes priceStrike { 0% { background-size: 0% 1.5px; } 100% { background-size: 100% 1.5px; } }
+@keyframes spin-slow { from { transform: rotate(0); } to { transform: rotate(360deg); } }
+.animate-spin-slow { animation: spin-slow 4s linear infinite; }
+/* Single-shot ring expansion — used by the variant swatch click feedback */
+@keyframes pingOnce { 0% { transform: scale(.85); opacity: .9; } 100% { transform: scale(1.4); opacity: 0; } }
+.animate-ping-once { animation: pingOnce 420ms ease-out forwards; }
+/* Vertical scroll loop for the drop-event reservation ticker. List is
+   duplicated in markup, then translated by -50% to seam-loop. */
+@keyframes marqueeY { 0% { transform: translateY(0); } 100% { transform: translateY(-50%); } }
+.animate-marquee-vertical { animation: marqueeY 18s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .animate-marquee-vertical { animation: none; } }
+/* Click-to-zoom modal entrance — gentle overshoot so the image
+   "lands" in the viewport instead of snapping. */
+@keyframes zoomIn { 0% { opacity: 0; transform: scale(.85); } 100% { opacity: 1; transform: scale(1); } }
+/* Programmatic 15s "product video" — drives the gallery video tab and
+   the landing hero showcase loop. Three independent keyframes so the
+   subject pans, the lights shift, and the progress bar fills in sync. */
+@keyframes productVideoPan {
+  0%   { transform: scale(0.92) translate(-2%, 1%) rotate(-1.5deg); }
+  25%  { transform: scale(1.05) translate(2%, -1%) rotate(0.5deg); }
+  50%  { transform: scale(1.12) translate(0, 0)    rotate(0deg); }
+  75%  { transform: scale(1.04) translate(-1.5%, 1%) rotate(-0.8deg); }
+  100% { transform: scale(0.96) translate(2%, -2%) rotate(1deg); }
+}
+@keyframes productVideoBg {
+  0%   { filter: hue-rotate(0deg)   saturate(1); opacity: 0.8; }
+  50%  { filter: hue-rotate(20deg)  saturate(1.2); opacity: 1; }
+  100% { filter: hue-rotate(-15deg) saturate(0.9); opacity: 0.85; }
+}
+@keyframes productVideoProgress { 0% { width: 0%; } 100% { width: 100%; } }
+@media (prefers-reduced-motion: reduce) {
+  .respect-reduced-motion-loops {
+    animation: none !important;
+  }
+}
+
+/* Animated strike-through — draws the line in from left to right.
+   Apply to anything that should LOOK struck (e.g. old price). */
+.voltik-strike {
+  background-image: linear-gradient(currentColor, currentColor);
+  background-position: 0 60%;
+  background-repeat: no-repeat;
+  background-size: 100% 1.5px;
+  animation: priceStrike 420ms ease-out 200ms both;
+}
+
+.voltik-wiggle {
+  animation: wiggle 0.55s ease-in-out;
+}
+.voltik-slide-away {
+  animation: slideAway 320ms ease-in forwards;
+  pointer-events: none;
+}
+.voltik-shake { animation: shake 360ms cubic-bezier(0.36, 0.07, 0.19, 0.97); }
+.voltik-bump      { animation: bumpSpring    340ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+.voltik-bump-up   { animation: bumpSpringUp  340ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+.voltik-bump-down { animation: bumpSpringDown 340ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+.voltik-page-fade { animation: fadeIn 280ms ease-out both; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

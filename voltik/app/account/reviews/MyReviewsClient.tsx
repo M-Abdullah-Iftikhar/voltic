@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { Icon } from '@/components/Icons';
 import { ProductIllustration } from '@/components/ProductIllustration';
+import { EmptyState } from '@/components/EmptyState';
 import type { Product, Review } from '@/lib/types';
 
 type Item = { review: Review; product: Product | null };
@@ -21,12 +22,12 @@ export function MyReviewsClient({ initialItems }: { initialItems: Item[] }) {
 
   if (items.length === 0) {
     return (
-      <div className="card p-14 text-center">
-        <Icon.star width={32} height={32} className="mx-auto text-muted" />
-        <h3 className="font-display font-bold text-xl mt-3">No reviews yet</h3>
-        <p className="text-sm text-muted mt-1 max-w-md mx-auto">After you receive an order, share your experience to help other shoppers.</p>
-        <Link href="/shop" className="btn-primary mt-6 inline-flex">Browse products <Icon.arrow width={14} height={14} /></Link>
-      </div>
+      <EmptyState
+        kind="reviews"
+        title="No reviews yet"
+        body="After you receive an order, share your experience to help other shoppers."
+        primary={{ href: '/shop', label: 'Browse products' }}
+      />
     );
   }
 
@@ -56,7 +57,7 @@ export function MyReviewsClient({ initialItems }: { initialItems: Item[] }) {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   {it.product ? (
-                    <Link href={`/product/${it.product.id}`} className="font-semibold hover:text-brand line-clamp-1">{it.product.name}</Link>
+                    <Link href={`/product/${it.product.slug || it.product.id}`} className="font-semibold hover:text-brand line-clamp-1">{it.product.name}</Link>
                   ) : (
                     <span className="font-semibold italic text-muted">Discontinued product</span>
                   )}
@@ -67,11 +68,13 @@ export function MyReviewsClient({ initialItems }: { initialItems: Item[] }) {
                 </div>
                 <h4 className="font-semibold mt-2">{it.review.title}</h4>
                 <p className="text-sm text-muted mt-1 leading-relaxed">{it.review.body}</p>
+
+                <HelpfulImpact review={it.review} />
               </div>
 
               <div className="flex flex-col gap-1 shrink-0">
                 {it.product && (
-                  <Link href={`/product/${it.product.id}#reviews`} className="btn-ghost text-xs !px-3">
+                  <Link href={`/product/${it.product.slug || it.product.id}#reviews`} className="btn-ghost text-xs !px-3">
                     <Icon.edit width={12} height={12} /> Edit
                   </Link>
                 )}
@@ -93,6 +96,47 @@ function Stat({ label, value }: { label: string; value: string }) {
     <div className="card p-4">
       <div className="font-display font-bold text-2xl">{value}</div>
       <div className="text-xs text-muted mt-0.5">{label}</div>
+    </div>
+  );
+}
+
+/**
+ * Tiny "you helped X shoppers" widget per review. Uses the helpful/not-
+ * helpful counters already maintained by /api/reviews/[id]/vote so it's
+ * just a different render of existing data. Hides itself if no one's
+ * voted yet — empty-ish reviews shouldn't carry a vanity badge.
+ */
+function HelpfulImpact({ review }: { review: Review }) {
+  const yes = review.helpfulCount    || 0;
+  const no  = review.notHelpfulCount || 0;
+  const total = yes + no;
+
+  // Nothing to brag about yet — render a one-liner nudge instead.
+  if (total === 0) {
+    return (
+      <div className="mt-3 pt-3 border-t border-line/60 flex items-center gap-2 text-[11px] text-muted">
+        <Icon.spark width={10} height={10} className="text-brand" />
+        Once shoppers see your review, the helpful-vote tally lands here.
+      </div>
+    );
+  }
+
+  const pct = total === 0 ? 0 : Math.round((yes / total) * 100);
+  return (
+    <div className="mt-3 pt-3 border-t border-line/60 flex flex-wrap items-center gap-2 text-[11px]">
+      <span className="inline-flex items-center gap-1 chip bg-success/15 text-success !text-[10px]">
+        <Icon.arrow width={9} height={9} className="-rotate-90" />
+        {yes} helpful
+      </span>
+      {no > 0 && (
+        <span className="inline-flex items-center gap-1 chip bg-elev text-muted !text-[10px]">
+          <Icon.arrow width={9} height={9} className="rotate-90" />
+          {no}
+        </span>
+      )}
+      <span className="text-muted">
+        <span className="font-semibold text-ink">{pct}%</span> of voters found it useful
+      </span>
     </div>
   );
 }

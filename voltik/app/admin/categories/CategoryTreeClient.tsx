@@ -2,6 +2,7 @@
 import { useMemo, useState } from 'react';
 import { Icon, type IconKey } from '@/components/Icons';
 import { ProductIllustration } from '@/components/ProductIllustration';
+import { AdminPageHeader } from '@/components/AdminPageHeader';
 import { buildTree, CATEGORY_GRADIENTS, descendantIds } from '@/lib/categoryTree';
 import type { Category, CategoryNode } from '@/lib/types';
 
@@ -104,19 +105,16 @@ export function CategoryTreeClient({ initialCategories, productCounts }: { initi
 
   return (
     <div className="space-y-6">
-      <header className="flex items-end justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="font-display font-bold text-3xl sm:text-4xl">Categories</h1>
-          <p className="text-muted text-sm mt-1">Hierarchical taxonomy — create roots, subcategories and sub-sub-categories on the fly.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={collapseAll} className="btn-ghost text-xs">Collapse all</button>
-          <button onClick={expandAll} className="btn-ghost text-xs">Expand all</button>
-          <button onClick={() => openCreate(null)} className="btn-primary text-xs">
-            <Icon.plus width={14} height={14} /> New root category
-          </button>
-        </div>
-      </header>
+      <AdminPageHeader
+        title="Categories"
+        subtitle="Hierarchical taxonomy — create roots, subcategories and sub-sub-categories on the fly."
+        crumbs={[{ label: 'Categories' }]}
+        secondary={{ label: 'Expand all', onClick: expandAll }}
+        primary={{ label: 'New root category', icon: 'plus', onClick: () => openCreate(null) }}
+      />
+      <div className="flex justify-end">
+        <button onClick={collapseAll} className="text-xs text-muted hover:text-ink">Collapse all</button>
+      </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Total nodes"      value={String(categories.length)} icon="tag" />

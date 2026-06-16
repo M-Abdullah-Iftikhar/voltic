@@ -1,4 +1,5 @@
-import type { Category, Customer, Order, Product, Review, User } from './types';
+import { uniqueSlug } from './slug';
+import type { Admin, Category, Customer, Order, Product, PromoCode, Review, Subscriber, User } from './types';
 
 /* ============================================================
    CATEGORIES — root + sub + sub-sub examples
@@ -160,6 +161,22 @@ export const SEED_PRODUCTS: Product[] = [
    ============================================================ */
 export type SeedUser = Omit<User, 'passwordHash'> & { plainPassword: string };
 
+/** Seeded admin account — hashed on first DB write, never plaintext on disk.
+ *  Override via the ADMIN_USER / ADMIN_PASS env vars if you want a different
+ *  bootstrap. Once seeded, you can change the password from /admin/profile
+ *  in a future iteration. */
+export type SeedAdmin = Omit<Admin, 'passwordHash'> & { plainPassword: string };
+
+export const SEED_ADMINS: SeedAdmin[] = [
+  {
+    id: 'a-arizz',
+    email: 'arizz@gmail.com',
+    name: 'Arizz',
+    plainPassword: 'arizz123#',
+    createdAt: '2025-12-01'
+  }
+];
+
 export const SEED_USERS: SeedUser[] = [
   {
     id: 'u-demo',
@@ -180,6 +197,34 @@ export const SEED_USERS: SeedUser[] = [
     favorites: []
   }
 ];
+
+/* ============================================================
+   SEED PROMO CODES — a small starter set; admin can add more.
+   ============================================================ */
+export const SEED_PROMOS: PromoCode[] = [
+  { id:'VOLT10',    code:'VOLT10',    type:'percent',  value:10, minBasket:0,   active:true, usedCount:0, createdAt:'2025-12-01' },
+  { id:'WELCOME10', code:'WELCOME10', type:'percent',  value:10, minBasket:0,   active:true, usedCount:0, createdAt:'2025-12-01' },
+  { id:'WELCOME15', code:'WELCOME15', type:'percent',  value:15, minBasket:50,  active:true, usedCount:0, createdAt:'2025-12-01' },
+  { id:'FREESHIP',  code:'FREESHIP',  type:'shipping', value:0,  minBasket:25,  active:true, usedCount:0, createdAt:'2025-12-01' },
+  { id:'5OFF',      code:'5OFF',      type:'flat',     value:5,  minBasket:30,  active:true, usedCount:0, createdAt:'2025-12-01' }
+];
+
+/** Subscribers start empty — the newsletter form populates it live. */
+export const SEED_SUBSCRIBERS: Subscriber[] = [];
+
+/** Add stable slugs to seed products so URLs work out of the box. */
+export function withSeededSlugs(products: Product[]): Product[] {
+  const taken = new Set<string>();
+  return products.map(p => {
+    if (p.slug && !taken.has(p.slug)) {
+      taken.add(p.slug);
+      return p;
+    }
+    const s = uniqueSlug(p.name, taken);
+    taken.add(s);
+    return { ...p, slug: s };
+  });
+}
 
 /* ============================================================
    SEED REVIEWS — real review records that drive each product's

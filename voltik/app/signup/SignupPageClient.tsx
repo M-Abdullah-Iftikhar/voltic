@@ -6,6 +6,9 @@ import { Icon } from '@/components/Icons';
 import { AuthHero } from '@/components/AuthHero';
 import { useUser } from '@/components/UserContext';
 import { readAnonymousCart } from '@/components/CartContext';
+import { FloatingInput } from '@/components/FloatingInput';
+import { useMagnet } from '@/components/useMagnet';
+import { PasswordStrength } from '@/components/PasswordStrength';
 
 export function SignupPageClient() {
   const router = useRouter();
@@ -19,6 +22,7 @@ export function SignupPageClient() {
   const [show, setShow] = useState(false);
   const [err, setErr] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const magnetRef = useMagnet<HTMLButtonElement>({ strength: 0.35, radius: 90 });
 
   useEffect(() => {
     if (!loading && user) router.replace(next);
@@ -53,27 +57,50 @@ export function SignupPageClient() {
           <p className="text-muted text-sm mt-2">Takes 30 seconds. No credit card needed.</p>
 
           <form onSubmit={submit} className="mt-7 space-y-4">
-            <label className="block">
-              <span className="text-xs uppercase tracking-wide text-muted font-semibold">Full name</span>
-              <input className="input mt-1.5" autoFocus required value={name} onChange={e => setName(e.target.value)} />
-            </label>
-            <label className="block">
-              <span className="text-xs uppercase tracking-wide text-muted font-semibold">Email</span>
-              <input className="input mt-1.5" type="email" required value={email} onChange={e => setEmail(e.target.value)} />
-            </label>
-            <label className="block">
-              <span className="text-xs uppercase tracking-wide text-muted font-semibold">Password (min. 6)</span>
-              <div className="relative mt-1.5">
-                <input className="input pr-12" type={show ? 'text' : 'password'} required minLength={6} value={password} onChange={e => setPassword(e.target.value)} />
-                <button type="button" onClick={() => setShow(s => !s)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-ink text-xs">
+            <FloatingInput
+              label="Full name"
+              autoFocus required
+              value={name}
+              onChange={e => setName(e.target.value)}
+              validateOnBlur
+              validate={v => v && v.trim().length < 2 ? 'Name must be at least 2 characters.' : null}
+            />
+            <FloatingInput
+              label="Email"
+              type="email" required
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              validateOnBlur
+              validate={v => v && !/^\S+@\S+\.\S+$/.test(v) ? 'Please enter a valid email.' : null}
+            />
+            <div>
+              <div className="relative">
+                <FloatingInput
+                  label="Password (min. 6)"
+                  type={show ? 'text' : 'password'}
+                  required
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  className="pr-16"
+                  validateOnBlur
+                  validate={v => v && v.length < 6 ? 'Password must be at least 6 characters.' : null}
+                />
+                <button type="button" onClick={() => setShow(s => !s)}
+                  className="absolute right-3 top-3 text-muted hover:text-ink text-xs z-10">
                   {show ? 'Hide' : 'Show'}
                 </button>
               </div>
-            </label>
+              <PasswordStrength password={password} />
+            </div>
 
-            {err && <div className="text-sm text-danger flex items-center gap-2"><Icon.close width={14} height={14} /> {err}</div>}
+            {err && <div className="text-sm text-danger flex items-center gap-2 voltik-shake"><Icon.close width={14} height={14} /> {err}</div>}
 
-            <button type="submit" disabled={submitting} className="btn-primary w-full justify-center !py-3 disabled:opacity-60">
+            <button
+              ref={magnetRef}
+              type="submit"
+              disabled={submitting}
+              className="btn-primary w-full justify-center !py-3 disabled:opacity-60"
+            >
               {submitting ? 'Creating…' : <>Create account <Icon.arrow width={16} height={16} /></>}
             </button>
           </form>

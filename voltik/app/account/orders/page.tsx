@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { currentUser } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { Icon } from '@/components/Icons';
+import { PullToRefresh } from '@/components/PullToRefresh';
 import { OrdersListClient } from './OrdersListClient';
 
 export const dynamic = 'force-dynamic';
@@ -15,6 +16,7 @@ export default async function AccountOrdersPage() {
 
   return (
     <div className="space-y-6">
+      <PullToRefresh />
       <div className="flex items-end justify-between gap-3 flex-wrap">
         <div>
           <h2 className="font-display font-bold text-2xl">My orders</h2>

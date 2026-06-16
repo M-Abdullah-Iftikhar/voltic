@@ -24,6 +24,7 @@ export function ThemeToggle() {
       onClick={toggle}
       aria-label="Toggle theme"
       className="grid place-items-center h-10 w-10 rounded-full border border-line text-ink hover:bg-elev transition"
+      suppressHydrationWarning
     >
       {theme === 'dark'
         ? <Icon.sun width={18} height={18} />

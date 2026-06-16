@@ -23,7 +23,10 @@ interface Props {
 
 export function CoverflowStrip({ products, title = 'Editor\'s picks', kicker = 'In rotation' }: Props) {
   const items = products.slice(0, 10);
-  const [idx, setIdx] = useState(0);
+  // Start with the middle card in front so the strip reads as a true
+  // coverflow on first paint — leaves on both sides instead of an empty
+  // left flank and a stack of leaves on the right.
+  const [idx, setIdx] = useState(() => Math.floor(items.length / 2));
   const [reduced, setReduced] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -40,8 +43,10 @@ export function CoverflowStrip({ products, title = 'Editor\'s picks', kicker = '
     dx > 0 ? prev() : next();
   };
 
-  const next = () => setIdx(i => Math.min(items.length - 1, i + 1));
-  const prev = () => setIdx(i => Math.max(0, i - 1));
+  // Wrap around at the ends — pressing "previous" on the first card
+  // jumps to the last and vice versa, so the strip never dead-ends.
+  const next = () => setIdx(i => (i + 1) % items.length);
+  const prev = () => setIdx(i => (i - 1 + items.length) % items.length);
 
   // Keyboard nav.
   const onKey = (e: React.KeyboardEvent) => {
@@ -60,12 +65,12 @@ export function CoverflowStrip({ products, title = 'Editor\'s picks', kicker = '
           <p className="text-muted text-sm mt-1">Swipe or tap the arrows — the centre card is up for grabs.</p>
         </div>
         <div className="flex gap-2 shrink-0">
-          <button onClick={prev} disabled={idx === 0} aria-label="Previous"
-            className="grid place-items-center h-10 w-10 rounded-full border border-line text-ink hover:bg-elev transition disabled:opacity-40">
+          <button onClick={prev} aria-label="Previous"
+            className="grid place-items-center h-10 w-10 rounded-full border border-line text-ink hover:bg-elev transition">
             <Icon.arrow width={14} height={14} className="rotate-180" />
           </button>
-          <button onClick={next} disabled={idx === items.length - 1} aria-label="Next"
-            className="grid place-items-center h-10 w-10 rounded-full border border-line text-ink hover:bg-elev transition disabled:opacity-40">
+          <button onClick={next} aria-label="Next"
+            className="grid place-items-center h-10 w-10 rounded-full border border-line text-ink hover:bg-elev transition">
             <Icon.arrow width={14} height={14} />
           </button>
         </div>
@@ -85,7 +90,14 @@ export function CoverflowStrip({ products, title = 'Editor\'s picks', kicker = '
       >
         <div className="relative h-full w-full">
           {items.map((p, i) => {
-            const offset = i - idx;
+            // Circular offset — picks the shorter way around the ring so
+            // leaves always fan out on both sides of the active card and
+            // wrapping from the first to the last (or vice versa) reads
+            // as a single-step slide instead of a teleport across the row.
+            const n = items.length;
+            let offset = i - idx;
+            if (offset >  n / 2) offset -= n;
+            if (offset < -n / 2) offset += n;
             const abs = Math.abs(offset);
             // Cards more than 3 away are off-screen and hidden from a11y.
             if (abs > 3) return null;
